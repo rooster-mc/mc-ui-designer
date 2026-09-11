@@ -54,6 +54,9 @@ Out of scope (backlog):
   for transitive deps) and the matching `FastAsyncWorldEdit-Paper-2.15.3.jar`
   auto-downloaded from GitHub releases by `run-paper` (Hangar's FAWE entries
   have no download URLs).
+- **Cuboid selections only.** A `Region` is a min/max bounding box, so a
+  non-cuboid FAWE selection (`//hcyl`, `//poly`) captures every chest inside its
+  bounding box, not only those inside the shape. Shape fidelity is backlog.
 - **Testing:** JUnit 6 + MockBukkit (`org.mockbukkit.mockbukkit:mockbukkit-v26.2`).
   Pure logic (model, JSON, grouping math) stays Bukkit-free where possible.
 - **Config:** `config.yml` read through Bukkit's `FileConfiguration`; the
