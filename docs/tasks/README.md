@@ -7,7 +7,7 @@ goes through the review pipeline in `docs/workflow.md`.
 
 | Id | Title | Parent | Depends on | Status |
 |---|---|---|---|---|
-| [000](000-project-setup.md) | Project setup and dev server | MVP | — | todo |
+| [000](000-project-setup.md) | Project setup and dev server | MVP | — | done |
 | [010](010-config.md) | Config loading and default output path | MVP | 000 | todo |
 | [020](020-model-and-json.md) | Data model and JSON export | MVP | 000 | todo |
 | [030](030-selection-capture.md) | FAWE selection capture and chest scan | MVP | 020 | todo |

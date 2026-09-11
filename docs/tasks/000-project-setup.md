@@ -1,6 +1,6 @@
 ---
 name: Project setup and dev server
-status: todo
+status: done
 parent: MVP
 depends-on: []
 reviewers: [tester, correctness, architecture, readability]
