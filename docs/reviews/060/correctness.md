@@ -133,3 +133,106 @@ geometry-merged double whose name sits on the non-canonical half.
   entity.** `Exported(named.size)` is correct for that model; the only concern is
   the ticket's literal "number of chests exported" wording, which `ux.md` issue 3
   already covers, so I am not re-raising it as a defect.
+
+## Round 2
+
+### Verdict
+
+Ship with one low-severity fix. Round-1 #1, #2, and #4 all landed and are
+verifiable in the tree, and the `Region.blockAt`/`DoubleChestGrouper` refactor is
+behaviour-preserving. The remaining defect is the reload-side twin of round-1
+#1: `reload()` resolves `configProvider().outputFile` (and runs `reloadAction()`)
+with no guard, so a config whose output path cannot be parsed throws out of the
+command executor instead of producing feedback. Deferred #3 (name on the
+non-canonical geometry-merged half) and ux #2 (reload false-success) stand as
+recorded; the manual FAWE end-to-end remains unverified.
+
+### Issues
+
+#### 1. `/uidesigner reload` resolves the config path outside any guard (severity: low)
+
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/UiDesignerCommand.kt:44-45,92-95`;
+  `src/main/kotlin/dev/cypdashuhn/uidesigner/config/UiDesignerConfig.kt:10-11,26-33`
+- Problem: `reload()` calls `reloadAction()` and then
+  `configProvider().outputFile` with no `try`. Round-1 #1 fixed exactly this
+  shape for `save` (`UiDesignerCommand.kt:78-83`), but the reload path was left
+  unguarded, and round-1 #4 made it reachable from the console (`reloadExecutor`
+  uses `.executes`). `outputFile` calls `Path.of(raw)` and `defaultOutputFile()`
+  (`error(...)`), so `output-file: "\0"` (a parseable YAML double-quoted NUL, or a
+  Windows-invalid path such as `C:/a<b>.json`) throws `InvalidPathException`, and
+  a missing packaged default throws `IllegalStateException`. Either escapes the
+  `CommandExecutor`, so the sender gets no `Could not ...` line and the server
+  logs a trace; `reloadAction()` can throw the same way from
+  `writeDefaultOutputIfBlank()` before `reload()` ever returns. This is the one
+  path where "errors for IO failure" in the ticket is still not honoured.
+- Repro: set `output-file: "\0"` in `plugins/UiDesigner/config.yml`, run
+  `/uidesigner reload` (player or console) → `InvalidPathException` escapes the
+  executor, no feedback. Running `/uidesigner save` on the same config now prints
+  `Could not write the export: ...`, confirming the asymmetry.
+- Suggested fix: mirror #1's guard. Minimal: wrap the executor body so the whole
+  `reload()` is protected and a failure is reported, e.g.
+  `CommandExecutor { sender, _ -> sender.sendMessage(runCatching { reload() }.fold(::reloadMessage) { Component.text("Could not reload config.yml: ${it.message ?: it.javaClass.simpleName}") }) }`,
+  or give `reload()` a small sealed result like `SaveOutcome`. If deliberately
+  deferred, record it beside ux #2 for 070's error pass rather than leaving it
+  silent.
+
+### Non-issues
+
+- **Round-1 #1 resolved.** `configProvider().outputFile` is now inside its own
+  `try`/`catch (e: Exception)` and maps to `failure(e)` →
+  `WriteFailed(null, reason)` (`UiDesignerCommand.kt:78-83`); the dedicated test
+  `save reports an unusable config path without throwing`
+  (`UiDesignerCommandTest.kt:206-223`) pins it. `Path.of`/`error()` both throw
+  `Exception` subtypes, so they are caught.
+- **Round-1 #2 resolved and internally consistent.** The generated and packaged
+  `plugin.yml` both declare `depend: [FastAsyncWorldEdit]`
+  (`build/generated/plugin-yml/Bukkit/plugin.yml:4-5`,
+  `build/resources/main/plugin.yml:4-5`), so a FAWE-less server refuses to enable
+  UiDesigner and the `NoClassDefFoundError` repro is unreachable. The lazy
+  anonymous `SelectionSource` is still correct and needed for MockBukkit: the
+  `FaweSelectionSource` reference remains inside the method body
+  (`UiDesignerPlugin.kt:38-44`), so it is not class-loaded during `onEnable` on
+  the FAWE-free test classpath. The two changes are complementary, not
+  redundant.
+- **Round-1 #4 resolved.** `reload` and `help` (and the bare root) use
+  `CommandExecutor` and `.executes(...)` (`UiDesignerCommand.kt:44-46,57-63`),
+  so console reaches them; only `save` stays `executesPlayer`. Pinned by
+  `console can reload` / `console can print help` (`UiDesignerCommandTest.kt:312-321,348-354`).
+- **The `Region.blockAt` refactor is behaviour-preserving.** `blockAt` is the
+  literal former call `world.getBlockAt(position.x, position.y, position.z)`
+  (`Region.kt:12`); both grouper sites (`DoubleChestGrouper.kt:45,76`) and
+  `nameAt` (`UiDesignerCommand.kt:100-101`) delegate to it. No coordinate or
+  `BlockPos` semantics changed, and the refactor touches no chunk/threading
+  behaviour.
+- **Main-thread access is unchanged.** `save` still runs on the player executor
+  and `reload`/`help` on the command executor, all on the server main thread;
+  every `Block`/`Chest`/`Inventory` read and the small synchronous write stay
+  there.
+- **Name lookup at the canonical position is unchanged, and deferred #3 stands.**
+  `save` enriches names over the grouped list at `chest.position`
+  (`UiDesignerCommand.kt:72-77`); the linked-double path reads both halves
+  through `ChestNamer.chestsOf`, the unlinked geometry fallback reads only the
+  canonical half. That limitation is recorded at `docs/design.md:79-82` and is
+  explicitly deferred, so it is a decision rather than a hidden regression.
+- **Output still matches `docs/data-format.md`.** `JsonExporter` is untouched by
+  round 2; `DesignJson.encodeDefaults = false` omits null names and the
+  `@Transient` `position`, `normalized` sorts by canonical position and rows/slots
+  and filters empty rows, and `UiSlot.item` is `stack.type.key`
+  (`minecraft:stone`). Casing, ordering, and omission rules are unaffected.
+- **`WriteFailed(outputFile: Path?, reason: String)` nullability is sound.**
+  `null` means the path itself could not be resolved (no target is known), a
+  non-null `Path` means the write failed at that target; `saveMessage` renders
+  both (`UiDesignerCommand.kt:119-122`) and the tests assert each shape
+  (`UiDesignerCommandTest.kt:200-222`). `docs/data-format.md` does not govern
+  command outcomes, and the ticket only asks for an IO-failure error, which is
+  satisfied.
+- **No-chests / air / blank-name handling is unchanged.** Empty scanner results
+  still map to `NoChests`, empty stacks are dropped by the grouper, and blank
+  chest/slot names are dropped by the exporter, so the unnamed form in
+  `docs/data-format.md` is still reached.
+- **The stale `architecture.md` `region.world.getBlockAt(...)` snippets are
+  already `architecture` round-2 issue 1**, and the undocumented `depend` is its
+  issue 2; I am not duplicating them here.
+- **Manual FAWE end-to-end remains unverified**, as stated in the ticket and the
+  other round-2 reports; nothing in round 2 changes that, and it must be recorded
+  before `done`.

@@ -42,7 +42,7 @@ class UiDesignerCommand(
 
     fun register() {
         val reloadExecutor =
-            CommandExecutor { sender, _ -> sender.sendMessage(reloadMessage(reload())) }
+            CommandExecutor { sender, _ -> sender.sendMessage(reloadFeedback()) }
         val helpExecutor = CommandExecutor { sender, _ -> sender.sendMessage(helpMessage()) }
         CommandAPICommand("uidesigner")
             .withAliases("uid")
@@ -124,6 +124,11 @@ class UiDesignerCommand(
 
     private fun reloadMessage(outputFile: Path): Component =
         Component.text("Reloaded config.yml. Output file: $outputFile.")
+
+    private fun reloadFeedback(): Component =
+        runCatching { reload() }.fold(::reloadMessage) { e ->
+            Component.text("Could not reload config.yml: ${e.message ?: e.javaClass.simpleName}")
+        }
 
     private fun helpMessage(): Component =
         Component.text(

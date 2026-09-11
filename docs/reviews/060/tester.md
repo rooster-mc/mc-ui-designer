@@ -95,3 +95,77 @@ current write-failure test only proves the outcome mapping.
   enabling without FAWE. The ticket's dev-server walkthrough remains a manual
   check and should be recorded before `done`, not faked with a test that only
   re-tests MockBukkit.
+
+## Round 2
+### Verdict
+Ship. All three round-1 tester issues are fixed and covered at the correct
+layer, and the tests added for the other reviewers' fixes are proportionate
+regression guards. I found no missing, brittle, or excessive tests that warrant
+further work; the only unverified item remains the manual FAWE dev-server
+walkthrough, which is explicitly out of reach in this harness.
+
+### Issues
+None.
+
+### Non-issues (round-1 fixes verified)
+- **Issue 1 fixed at the right layer.** `JsonExporterTest.a failed export leaves
+  the previous file intact` (`JsonExporterTest.kt:233-244`) pre-writes the target
+  with `"previous"`, drives the failure through `toJson`'s
+  `requireNotNull(position)` after `createTemp` but before `move`, and asserts the
+  target still reads `"previous"`. That closes the truncate-before-write
+  regression the round-1 gap allowed, while `a failed export deletes the
+  temporary file` (`:216-231`) still covers temp cleanup. Kept in `export`, not
+  the command, exactly as recommended; the injected-thrower command test remains
+  the outcome-mapping test it should be.
+- **Issue 2 fixed.** `save writes the exported design to the configured file`
+  (`UiDesignerCommandTest.kt:157-188`) now decodes via
+  `DesignJson.decodeFromString<List<UiChest>>` and asserts name/rows/item
+  (`:175-187`) instead of matching `"name": "Shop"` whitespace. Pretty-print
+  stability is still pinned by the exact snapshots in `JsonExporterTest`, so this
+  test is now about the wiring, not the formatter.
+- **Issue 3 fixed.** `UiDesignerPluginTest.plugin registers the uidesigner
+  command` (`UiDesignerPluginTest.kt:37-50`) loads the real plugin and dispatches
+  `uidesigner help` through the `onEnable` registration, then asserts the help
+  text. Removing `UiDesignerCommand(...).register()` from `onEnable` now fails a
+  test — the integration assertion the ticket's "integration point" framing
+  warranted.
+
+### New tests for the other reviewers' fixes
+- **Config-path failure (`correctness` #1) is well placed.**
+  `save reports an unusable config path without throwing`
+  (`UiDesignerCommandTest.kt:206-223`) throws from `configProvider` and asserts
+  `WriteFailed(null, ...)`, exercising the catch that now wraps
+  `configProvider().outputFile` (`UiDesignerCommand.kt:78-83`). Command layer is
+  right: the classification is command behaviour, and the underlying
+  `UiDesignerConfig` throw is already covered in `UiDesignerConfigTest`.
+- **Console reload/help (`correctness` #4) are legitimate regression guards.**
+  `console can reload` (`UiDesignerCommandTest.kt:312-321`) asserts the injected
+  reload actually ran from `server.consoleSender`; `console can print help`
+  (`:348-354`) proves help no longer uses a player-only executor. Both would fail
+  against the pre-fix `executesPlayer` registration, so they earn their place.
+  `console can print help` does not assert the text (the player help test already
+  does), which is fine at this price.
+- **`Region.blockAt` (`architecture` #2) needs no dedicated test.** It is a
+  one-line delegate to `World.getBlockAt` (`Region.kt:12`); a direct test would
+  only re-assert MockBukkit. It is exercised indirectly through both grouper call
+  sites (`DoubleChestGrouper.kt:45,76`, hit by the geometry-fallback and
+  orientation tests) and through `nameAt` in `save`
+  (`UiDesignerCommand.kt:101`). The refactor is behaviour-preserving and covered.
+- **No new brittleness.** The added assertions target outcomes/payloads (decoded
+  model, `SaveOutcome`, an executed side effect) rather than message text or
+  internal structure, and no snapshots were added. The mildest is
+  `UiDesignerPluginTest`'s `message.contains("save")`, the same brittleness level
+  as the existing help test.
+- **No excessive tests.** The suite grew by four targeted cases (exporter
+  atomicity, config-path, console-reload, console-help) plus the plugin
+  registration case; each pins a distinct regression the round-1 gaps or fixes
+  created, and none duplicates `DoubleChestGrouperTest`/`JsonExporterTest`.
+
+### Not re-litigated
+- Correctness #3 (name on the non-canonical half of an unlinked geometry-merged
+  double) is deferred and now documented in `docs/design.md`; ux #2 (reload
+  false-success wording) is deferred to 070. Neither affects test quality.
+- The manual FAWE selection end-to-end (`docs/tasks/060-export-command.md:24-26`)
+  remains unverifiable here (FAWE is `compileOnly`, MockBukkit cannot form a real
+  selection or linked `DoubleChest`) and must be recorded as an unverified step
+  before `done`, not faked with a test that only re-tests MockBukkit.

@@ -40,7 +40,8 @@ uidesigner/
   contained no chests). The plugin wires a lazy delegating `SelectionSource`
   rather than `FaweSelectionSource` directly: FAWE is `compileOnly` and absent
   from MockBukkit's classpath, and the delegation keeps `FaweSelectionSource`
-  from class-loading during `onEnable`.
+  from class-loading during `onEnable`. FAWE is also a hard `depend` in
+  `plugin.yml`, so a real server refuses to enable without it.
 - **`Region` is cuboid-only.** `FaweSelectionSource` reduces any FAWE selection
   (including non-cuboid `//hcyl`/`//poly`) to its min/max bounding box, so a
   chest inside the box but outside the actual selection is captured. Shape
@@ -69,12 +70,11 @@ uidesigner/
   shared inventory).
 - **Grouper input contract (040/060).** `ChestContent` stays `position + items`
   only. `DoubleChestGrouper` receives the `Region` alongside the
-  `List<ChestContent>`, so it can reach each block via
-  `region.world.getBlockAt(position.x, position.y, position.z)`; 060 reads chest
-  names from the same blocks with `ChestNamer.nameOf(block)`. `items` is
-  expected to be a positive multiple of 9 (the scanner captures 27, a merged
-  double 54); the grouper fails fast otherwise rather than emitting a malformed
-  `rows`.
+  `List<ChestContent>`, so it can reach each block via `region.blockAt(position)`;
+  060 reads chest names from the same blocks with `ChestNamer.nameOf(block)`.
+  `items` is expected to be a positive multiple of 9 (the scanner captures 27, a
+  merged double 54); the grouper fails fast otherwise rather than emitting a
+  malformed `rows`.
 - **Double detection (040).** The holder route is primary:
   `(block.state as? Chest)?.inventory?.holder as? DoubleChest`, then
   `DoubleChest.leftSide`/`rightSide` give the two half positions and the merged
@@ -134,7 +134,7 @@ player + FAWE selection
   CapturedSelection?          (region + List<ChestContent>, one per chest *block*;
         │                      empty contents = selection had no chests)
         │  DoubleChestGrouper(selection.region, selection.contents)
-        │  -> region.world.getBlockAt(position.x, position.y, position.z)
+        │  -> region.blockAt(position)
         ▼
   List<UiChest>               (double chests merged; names still null)
         │  UiDesignerCommand: ChestNamer.nameOf at each canonical position

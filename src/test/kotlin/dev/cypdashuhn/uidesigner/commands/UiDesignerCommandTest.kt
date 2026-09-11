@@ -310,6 +310,19 @@ class UiDesignerCommandTest {
     }
 
     @Test
+    fun `dispatch of reload reports a failure without throwing`() {
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(plugin, reloadAction = { throw IllegalStateException("bad config") })
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner reload")
+
+        val message = plainMessage()
+        assertTrue(message.contains("Could not reload config.yml"))
+        assertTrue(message.contains("bad config"))
+    }
+
+    @Test
     fun `console can reload`() {
         var reloaded = false
         val plugin = MockCommandAPIPlugin.load()
@@ -397,14 +410,13 @@ class UiDesignerCommandTest {
     private fun unregisteredCommand(
         region: Region? = null,
         outputFile: Path = DEFAULT_OUTPUT,
-        reloadAction: () -> Unit = {},
         exporter: (List<UiChest>, Path) -> Unit = { _, _ -> },
     ): UiDesignerCommand =
         UiDesignerCommand(
             plugin = MockBukkit.createMockPlugin(),
             selectionSource = FakeSelectionSource(region),
             configProvider = { config(outputFile) },
-            reloadAction = reloadAction,
+            reloadAction = {},
             exporter = exporter,
         )
 

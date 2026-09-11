@@ -169,3 +169,113 @@ consumer; I would not extract it yet.
 - **Permission default is correct.** `.withPermission("uidesigner.save")` on the
   `save` subcommand defaults to op, satisfying the ticket; `reload` getting its
   own `uidesigner.reload` node is a sensible extra, not scope creep.
+
+## Round 2
+
+### Verdict
+
+Ship with fixes, and the fixes are documentation-only. Both round-1 fix-now
+issues genuinely landed: the lazy FAWE wiring is recorded and accurate, and
+`Region.blockAt(BlockPos)` now backs the command and both grouper lookup sites.
+The `depend = listOf("FastAsyncWorldEdit")` and the per-sender executors are the
+right architectural calls. The only problem is that the `Region.blockAt` refactor
+left two stale `region.world.getBlockAt(...)` snippets in `architecture.md`, and
+the new hard plugin dependency is not recorded anywhere. Neither affects code,
+extensibility, or boundaries; both are one-line doc corrections.
+
+### Issues
+
+#### 1. `architecture.md` still shows the pre-`blockAt` call in two places (severity: low) — fix now
+
+- Location: `docs/architecture.md:73` and `docs/architecture.md:137`
+- Problem: The round-1 fix added `Region.blockAt` and correctly updated the seam
+  prose (`architecture.md:47-49`), but two older references still read
+  `region.world.getBlockAt(position.x, position.y, position.z)`:
+  - the grouper input-contract bullet at `:70-74` ("so it can reach each block
+    via `region.world.getBlockAt(...)`"), and
+  - the data-flow diagram at `:136-137`
+    (`-> region.world.getBlockAt(position.x, position.y, position.z)`).
+  The code now calls `region.blockAt(position)` at `DoubleChestGrouper.kt:45,76`,
+  so the doc is internally inconsistent (it declares the helper three lines
+  earlier and then shows the raw call), and it re-teaches the exact
+  hand-unpacking pattern issue 2 asked to remove. A reader trusting the diagram
+  would re-introduce `region.world` in `commands/`/`capture/`.
+- Suggested fix: replace both snippets with `region.blockAt(position)` (or with
+  prose: "via `Region.blockAt`"). No code change.
+
+#### 2. The new hard FAWE dependency is not recorded (severity: low) — fix now
+
+- Location: `build.gradle.kts:69`; `docs/design.md:52-56`;
+  `docs/architecture.md:40-43`
+- Problem: `depend = listOf("FastAsyncWorldEdit")` makes FAWE a hard `plugin.yml`
+  dependency — the server refuses to enable UiDesigner without it. That is the
+  correct production counterpart to the test-only lazy delegating
+  `SelectionSource` (`UiDesignerPlugin.kt:38-44`), but neither the FAWE decision
+  bullet (`design.md:52-56`, which describes only the `compileOnly`/run-paper
+  build side) nor the `SelectionSource` seam bullet (`architecture.md:40-43`,
+  which explains only the MockBukkit class-loading reason) mentions it. As
+  written, the docs explain why the wrapper exists but not why it is not simply
+  the whole FAWE story, and a reader cannot tell from the docs that FAWE is
+  required at runtime.
+- Suggested fix: extend the `SelectionSource` seam sentence (or the
+  `design.md` FAWE bullet) with one clause: the plugin declares FAWE as a hard
+  `depend` in `plugin.yml`, so a real server refuses to enable without it while
+  the lazy wrapper keeps `FaweSelectionSource` from class-loading under
+  MockBukkit. No code change.
+
+### Non-issues
+
+- **Round-1 fix #1 landed and is accurate.** `architecture.md:40-43` records that
+  the plugin wires a lazy delegating `SelectionSource` because FAWE is
+  `compileOnly` and absent from MockBukkit's classpath, and that the delegation
+  keeps `FaweSelectionSource` from class-loading during `onEnable`. That matches
+  `UiDesignerPlugin.kt:38-44` exactly; the only missing half is the `depend`
+  (issue 2).
+- **Round-1 fix #2 landed as scoped.** `Region.blockAt(BlockPos)` exists
+  (`Region.kt:12`) and is used by the command (`UiDesignerCommand.kt:100-101`,
+  via the new `nameAt` helper) and both grouper sites
+  (`DoubleChestGrouper.kt:45,76`); `commands/` no longer touches `Region.world`.
+  The one remaining inline lookup is `ChestScanner.kt:16`, and that is fine: the
+  scanner iterates raw `x`/`y`/`z` ints rather than a `BlockPos`, and it needs
+  `region.world.isChunkLoaded` (`:15`) anyway, so routing through
+  `blockAt(BlockPos)` would allocate a value per scanned block for no gain.
+  `architecture.md:47-49` scopes the helper to "the grouper and the command",
+  which matches the code. Carry over only if a bounds/chunk guard is ever added
+  to `Region.blockAt`: the scanner would then need the same guard.
+- **`depend` is the right architectural fit, not a new boundary.** FAWE is
+  already the plugin's core capability (`docs/design.md:25`), so a hard runtime
+  dependency is honest, and it closes the correctness #2 gap where `save` would
+  otherwise throw `NoClassDefFoundError` on a FAWE-less server. `FastAsyncWorldEdit`
+  is the correct Bukkit plugin name and `run-paper` loads the matching jar
+  (`build.gradle.kts:101-108`), so the dev server is unaffected. It does not
+  change the code seam: `model`/`export` stay pure and FAWE stays behind
+  `SelectionSource`.
+- **Console-capable executors are correct and documented.** `reload` and `help`
+  (and the bare root) use `CommandExecutor` and accept any `CommandSender`;
+  `save` stays on `executesPlayer` because it needs a player's FAWE selection
+  and block context (`UiDesignerCommand.kt:50-63`). That matches
+  `architecture.md:117-120` and is pinned by `console can reload` /
+  `console can print help`. No player-state code runs on the console paths.
+- **The round-1 fixes introduced no duplication or boundary violation.**
+  `Region.blockAt` is a single shared helper, not a second implementation of the
+  lookup; the grouper/command now depend on the method rather than the `world`
+  field. The `depend` and executor changes are config/registration only. The
+  `nameAt` extraction (`UiDesignerCommand.kt:100-101`) is a net readability win
+  and does not move the batch-naming responsibility out of the command.
+- **Carry-overs are unchanged and none was made worse.** #3 (naming step in the
+  command) is slightly better contained by `nameAt` but still command-owned; #4
+  (`SaveOutcome`/`Messages` seam) still needs planning for 070 but `SaveOutcome`
+  is a non-private nested type 070 can consume; #5 (per-subcommand split) is
+  untouched; #6 (only exporter failures caught) actually improved, since
+  correctness #1 moved `configProvider().outputFile` inside a `try`
+  (`UiDesignerCommand.kt:78-89`), so config-resolution failures now classify as
+  `WriteFailed` while capture/grouping remain outside it as before.
+- **Deferred correctness #3 is documented.** The geometry-merged-double name loss
+  is now recorded at `docs/design.md:79-82` next to the one-half-selected note,
+  with "carrying both merged positions out of the grouper is deferred", so the
+  limitation is a decision rather than a hidden bug. ux #2 remains 070's.
+- **The next-feature walkthrough still holds.** More container types change only
+  the scanner/grouper/namer and reuse `Region.blockAt`; import adds a subcommand
+  plus a loader seam (the #5 split); alternate formats swap the
+  `(List<UiChest>, Path) -> Unit` exporter. Nothing in the round-1 fixes
+  generalises prematurely or blocks those paths.

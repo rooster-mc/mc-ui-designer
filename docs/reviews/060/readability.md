@@ -104,3 +104,59 @@ gap. Nothing here needs a rewrite.
   fakes for `SelectionSource`/`exporter` keep each test followable; the
   dispatch/permission/help/alias coverage is clearly separated from the pipeline
   tests.
+
+## Round 2
+### Verdict
+Ship with one low-severity docs fix. Every round-1 item landed cleanly, the new
+`register()` locals and the `WriteFailed(outputFile, reason)` shape read well,
+and the added tests keep the suite followable. The only real finding is that the
+architecture doc still spells out the pre-refactor `region.world.getBlockAt(...)`
+call in two places while the code (and a third doc bullet) now uses
+`Region.blockAt(position)`.
+
+### Issues
+#### 1. Architecture doc contradicts itself on the block accessor (severity: low)
+- Location: `docs/architecture.md:73` and `docs/architecture.md:137`; cf. the new
+  bullet at `:47-49`.
+- Problem: `Region.blockAt(BlockPos)` was extracted for the grouper and the
+  command, and the doc now advertises it at `:47-49`. But the "Grouper input
+  contract" bullet and the data-flow diagram still show the inlined
+  `region.world.getBlockAt(position.x, position.y, position.z)`. A reader
+  following the flow is told the code calls something it no longer calls, and
+  the doc contradicts itself two sections apart.
+- Suggested fix: replace both occurrences with `region.blockAt(position)`.
+
+#### 2. `unregisteredCommand`'s `reloadAction` parameter is never overridden (severity: low)
+- Location: `src/test/kotlin/dev/cypdashuhn/uidesigner/commands/UiDesignerCommandTest.kt:400,407`.
+- Problem: every `reloadAction` override goes through `registeredCommand`; the
+  `unregisteredCommand` copy is always the `{}` default. It is a small unused
+  knob, though it does keep the two helpers' signatures symmetric.
+- Suggested fix: optional — drop the parameter and pass `reloadAction = {}`
+  inside `unregisteredCommand`, or leave it for parity. Not blocking.
+
+### Non-issues
+- **Round-1 items all landed.** `unregisteredCommand`/`registeredCommand` names
+  (`:381,397`), `registeredCommand` no longer returns a value (`register()` is
+  `Unit`), the write and non-op permission tests route through the helpers
+  (`:168,288`), `noun` (`:106`), the named `let` (`:75`), the inlined
+  double-chest setup (`:122-155`), the documented permission nodes
+  (`docs/architecture.md:117-120`), and the named `dataFolder = Path.of("")`
+  (`:417`).
+- **`reloadExecutor` / `helpExecutor`.** Naming the two `CommandExecutor`s keeps
+  the builder chain short and lets the root and `help` share one executor;
+  `reloadExecutor`'s single use is still clearer than inlining the lambda.
+- **`WriteFailed(outputFile, reason)`.** The nullable path distinguishes
+  "config unusable" from "write failed at path", and `saveMessage`'s
+  `?.let { " to $it" } ?: ""` renders both without a second outcome type. The
+  name covers the config-read failure too, but the message reads naturally, so
+  it does not slow a reader.
+- **Message strings.** The wrapped concatenations stay under 100 columns and the
+  `Exported`/`NoChests`/`WriteFailed` wording is direct.
+- **Added tests.** The write test's MockBukkit comment (`:162`) explains a
+  non-obvious *why*; the `save`-failure and plugin-registration tests follow the
+  same one-behaviour-per-test shape as the rest.
+- **Comments and dead code.** Only the two justified *why* comments in the
+  command test and the existing plugin-wrapper comments remain; no stray
+  comments, unused imports, or unreachable branches in the touched files.
+- **Formatting.** All touched Kotlin files are within the 100-column limit and
+  ktlint-clean per `.editorconfig` (implementor ran `just format`).

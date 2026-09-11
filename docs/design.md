@@ -53,7 +53,9 @@ Out of scope (backlog):
   `-Bukkit` (`compileOnly`, pinned to `2.15.3`, with the IntellectualSites BOM
   for transitive deps) and the matching `FastAsyncWorldEdit-Paper-2.15.3.jar`
   auto-downloaded from GitHub releases by `run-paper` (Hangar's FAWE entries
-  have no download URLs).
+  have no download URLs). FAWE is a hard `depend` in `plugin.yml`, so a server
+  refuses to enable UiDesigner without it; the lazy delegating `SelectionSource`
+  only exists to keep `FaweSelectionSource` from class-loading under MockBukkit.
 - **Cuboid selections only.** A `Region` is a min/max bounding box, so a
   non-cuboid FAWE selection (`//hcyl`, `//poly`) captures every chest inside its
   bounding box, not only those inside the shape. Shape fidelity is backlog.

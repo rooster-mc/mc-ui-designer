@@ -96,3 +96,77 @@ and the success unit "chest design(s)" is easy to misread as a block count.
   only asserts denial).
 - **`/chest-edit` "look at nothing" path.** Out of 060's scope; it was already
   reviewed under 050 and remains 070's error-wording pass.
+
+## Round 2
+### Verdict
+Ship. All four round-1 UX findings are resolved in the current tree, no new
+player-facing regression was introduced, and the console-capable `reload`/`help`
+paths send through `CommandSender` as intended. The remaining polish (prefix,
+colour, tab completion, explicit denial wording, and the `reload`
+false-success) is correctly deferred to 070.
+
+### Issues
+None. The round-1 items now read as follows.
+
+#### 1. Write-failure names the target (round 1 #1 — resolved)
+- `UiDesignerCommand.kt:119-122`:
+  `val target = outcome.outputFile?.let { " to $it" } ?: ""` then
+  `Component.text("Could not write the export$target: ${outcome.reason}")`.
+  An exporter failure now prints
+  `Could not write the export to /path/design.json: disk full` — path plus
+  reason, matching the detail level of the success line. The config-path failure
+  keeps the path-less form (`Could not write the export: missing default
+  output`), which is right because no path is known; that reason wording belongs
+  to 070's error pass. The optional "check the output folder is writable" hint
+  was not added, but it is not required now that the path is present.
+
+#### 2. Success wording calls out double-counting (round 1 #3 — resolved)
+- `UiDesignerCommand.kt:105-111`:
+  `"Exported ${outcome.chests} chest $noun to ${outcome.outputFile} (a double chest counts once)."`
+  A double plus a single now reads
+  `Exported 2 chest designs to /path/design.json (a double chest counts once).`
+  The parenthetical removes the "3 chest blocks → 2" ambiguity, and the help
+  line uses the same noun (`/uidesigner save - export the selected chest designs
+  to JSON`, `:131`). "chest design" is still slightly non-standard, but it is
+  internally consistent and no longer misreadable.
+
+#### 3. No-chests message is actionable (round 1 #4 — resolved)
+- `UiDesignerCommand.kt:114-118`:
+  `"The selection contains no chests. Place chests inside the selected region (loaded chunks only)."`
+  It gives a next step and covers the unloaded-chunk case the scanner silently
+  skips (`ChestScanner.kt:15`), so the message is no longer wrong for a
+  selection that extends past loaded terrain.
+
+#### 4. `reload`/`help` are console-capable (round 2 check — fine)
+- `UiDesignerCommand.kt:44-46,58-63`: both executors are
+  `CommandExecutor { sender, _ -> sender.sendMessage(...) }` and both
+  subcommands use `.executes(...)`, so console reaches them; `save` correctly
+  stays `executesPlayer` (it needs a player selection). The tests
+  `console can reload` and `console can print help`
+  (`UiDesignerCommandTest.kt:313,349`) pin this. Console sees
+  `Reloaded config.yml. Output file: /path.` and the same three-line help.
+
+### Non-issues
+- **Player loop unchanged and tight.** From "I have a selection" to "JSON on
+  disk" is still one command with no confirmation prompt; the four outcomes
+  (success, no selection, no chests, IO failure) each map to a single plain chat
+  line with no trace, matching `docs/design.md` use-case steps 3-5.
+- **No-selection message unchanged and fine.**
+  `"No WorldEdit selection. Select a region first."` (`:112-113`) still names
+  the tool, the problem, and the action, and stays distinct from the
+  empty-selection line.
+- **Presentation stays consistent with `/chest-edit`.** Both commands use a
+  single plain `Component.text` line with no prefix or colour, sentence case,
+  and a trailing period (`ChestEditCommand.kt:38-45`; `UiDesignerCommand.kt:103-134`).
+  The write-failure line ends with the raw reason (no guaranteed period), a tiny
+  inconsistency that 070's message centralisation will absorb; it does not
+  mislead.
+- **Fixes did not regress anything.** The success count is still grouped
+  `named.size`, the no-selection/empty-config early returns are untouched, and
+  the exporter's atomic write still leaves the previous file intact on failure
+  (`JsonExporter.kt:21-33`; pinned by
+  `JsonExporterTest.a failed export leaves the previous file intact`).
+- **Deferred and not re-litigated.** The `reload` false-success (round 1 #2) is
+  recorded for 070's error-wording pass; tab completion, colour/prefix, and
+  explicit permission-denial wording remain 070. The manual FAWE end-to-end walk
+  is still unverified and must be recorded before `done`.
