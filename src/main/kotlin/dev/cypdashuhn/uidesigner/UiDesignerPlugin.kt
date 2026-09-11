@@ -1,6 +1,9 @@
 package dev.cypdashuhn.uidesigner
 
+import dev.cypdashuhn.uidesigner.commands.ChestEditCommand
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
+import dev.jorel.commandapi.CommandAPI
+import dev.jorel.commandapi.CommandAPIPaperConfig
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.plugin.java.JavaPlugin
 
@@ -9,9 +12,15 @@ open class UiDesignerPlugin : JavaPlugin() {
     lateinit var uiConfig: UiDesignerConfig
         private set
 
+    override fun onLoad() {
+        CommandAPI.onLoad(CommandAPIPaperConfig(this))
+    }
+
     override fun onEnable() {
         saveDefaultConfig()
         reloadConfiguration()
+        CommandAPI.onEnable()
+        ChestEditCommand(this).register()
         logger.info("UiDesigner enabled")
     }
 
@@ -32,6 +41,7 @@ open class UiDesignerPlugin : JavaPlugin() {
     }
 
     override fun onDisable() {
+        CommandAPI.onDisable()
         logger.info("UiDesigner disabled")
     }
 }
