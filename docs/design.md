@@ -64,6 +64,13 @@ Out of scope (backlog):
 - **Casing:** the JSON keys are normalised to `camelCase` and made valid JSON.
   See `docs/data-format.md` for the corrected schema and the delta from the
   original draft.
+- **Chest names:** stored in the chest block's custom display name
+  (`Nameable`), not a PersistentDataContainer. It is visible in the chest GUI,
+  persists in block-entity NBT across restarts, and the exporter reads it as
+  plain text. Both halves of a double chest are named/cleared together, and
+  `nameOf` reads the first named half. `/chest-edit clear` (case-insensitive) is
+  reserved for removal and blank input also clears, so a literal name "clear"
+  is unreachable.
 
 ## Naming
 

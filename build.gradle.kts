@@ -43,8 +43,19 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.2:4.116.1")
+    testImplementation("dev.jorel:commandapi-paper-test-toolkit:11.2.0")
+    testImplementation("dev.jorel:commandapi-paper-core:11.2.0")
     // MockBukkit 4.116.1 targets Paper build 111; main stays on the server build.
     testImplementation("io.papermc.paper:paper-api:26.2.build.111-stable")
+}
+
+configurations {
+    testImplementation {
+        exclude(group = "dev.jorel", module = "commandapi-paper-shade")
+    }
+    testRuntimeClasspath {
+        exclude(group = "dev.jorel", module = "commandapi-paper-shade")
+    }
 }
 
 kotlin {
