@@ -36,11 +36,16 @@ Out of scope (backlog):
 
 ## Decisions (taken without asking)
 
-- **Standalone plugin.** We do not depend on the `rooster-*` libraries. They are
-  a style reference, not a required base; pulling them in couples us to older
-  Paper/JDK toolchains. If the house stack is wanted later, `rooster-core`
-  (config/region helpers) and `rooster-commands` (CommandAPI wrapper) are the
-  two candidates — revisit before writing more commands.
+- **Region via `rooster-region`.** The duplicated region/WorldEdit-selection
+  code was replaced by the sibling `rooster-region` library, consumed as a
+  Gradle composite build (`:core` + `:worldedit`); this requires
+  `../rooster-region` checked out beside this repository. The library targets
+  Paper 1.21.4 / Java 21, but the `Region`/`Location`/`World` surface it exposes
+  is stable on 26.2, so the version delta is accepted. Its `api` joml is
+  excluded from the shaded jar because Paper supplies joml at runtime. The rest
+  of the `rooster-*` stack is still not required: `rooster-core` (config
+  helpers) and `rooster-commands` (CommandAPI wrapper) remain candidates to
+  revisit before writing more commands.
 - **Excluded:** `rooster-ui` (we render nothing), `rooster-sql` (no database),
   `rooster-localization` (plain Adventure components are enough).
 - **Target:** Paper `26.2`, Java `25`, Kotlin `2.4.10`, matching the newest

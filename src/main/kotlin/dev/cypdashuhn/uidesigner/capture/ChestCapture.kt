@@ -1,5 +1,6 @@
 package dev.cypdashuhn.uidesigner.capture
 
+import dev.rooster.region.Region
 import org.bukkit.entity.Player
 
 data class CapturedSelection(

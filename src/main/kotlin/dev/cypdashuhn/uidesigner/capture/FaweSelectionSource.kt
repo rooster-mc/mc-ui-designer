@@ -1,39 +1,16 @@
 package dev.cypdashuhn.uidesigner.capture
 
-import com.sk89q.worldedit.IncompleteRegionException
-import com.sk89q.worldedit.WorldEdit
-import com.sk89q.worldedit.bukkit.BukkitAdapter
-import dev.cypdashuhn.uidesigner.model.BlockPos
+import dev.rooster.region.Region
+import dev.rooster.region.worldedit.toRegion
+import dev.rooster.region.worldedit.worldEditSelection
 import org.bukkit.entity.Player
 
 object FaweSelectionSource : SelectionSource {
     override fun selectionOf(player: Player): Region? {
-        val session =
-            WorldEdit
-                .getInstance()
-                .sessionManager
-                .getIfPresent(BukkitAdapter.adapt(player))
-                ?: return null
-        val world = BukkitAdapter.adapt(player.world)
-        if (!session.isSelectionDefined(world)) return null
-        val selection =
-            try {
-                session.getSelection(world)
-            } catch (_: IncompleteRegionException) {
-                return null
-            }
-        return Region.of(
-            BlockPos(
-                selection.minimumPoint.x(),
-                selection.minimumPoint.y(),
-                selection.minimumPoint.z(),
-            ),
-            BlockPos(
-                selection.maximumPoint.x(),
-                selection.maximumPoint.y(),
-                selection.maximumPoint.z(),
-            ),
-            BukkitAdapter.adapt(selection.world),
-        )
+        val selection = player.worldEditSelection() ?: return null
+        // The session's selection world survives a teleport, so a stale selection from another
+        // world must not be reinterpreted at the player's current-world coordinates.
+        if (selection.world?.name != player.world.name) return null
+        return selection.toRegion(player.world)
     }
 }

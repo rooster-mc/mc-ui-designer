@@ -1,6 +1,7 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import net.minecrell.pluginyml.bukkit.BukkitPluginDescription.Permission
 import org.apache.tools.ant.filters.ReplaceTokens
+import java.util.zip.ZipFile
 
 plugins {
     java
@@ -35,6 +36,9 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("dev.jorel:commandapi-paper-shade:11.2.0")
+
+    implementation("dev.rooster.region:rooster-region:1.0-SNAPSHOT")
+    implementation("dev.rooster.region:rooster-region-worldedit:1.0-SNAPSHOT")
 
     // BOM supplies transitive deps only; the explicit $faweVersion overrides its FAWE 2.15.0.
     compileOnly(platform("com.intellectualsites.bom:bom-newest:1.56"))
@@ -125,6 +129,24 @@ tasks.runServer {
 
 tasks.withType<ShadowJar> {
     mergeServiceFiles()
+    // Paper supplies joml at runtime; rooster-region's Vector3d API needs it but it must not ship.
+    exclude("org/joml/**")
+    doLast {
+        val archive = archiveFile.get().asFile
+        val jomlEntries =
+            ZipFile(archive).use { zip ->
+                zip
+                    .entries()
+                    .asSequence()
+                    .map { it.name }
+                    .filter { it.startsWith("org/joml/") }
+                    .toList()
+            }
+        check(jomlEntries.isEmpty()) {
+            "Shaded jar ${archive.name} must not bundle org.joml but contains " +
+                "${jomlEntries.size} entries, e.g. ${jomlEntries.take(5)}"
+        }
+    }
 }
 
 tasks.build {

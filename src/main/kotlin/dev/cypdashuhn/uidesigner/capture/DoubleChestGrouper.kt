@@ -4,6 +4,7 @@ import dev.cypdashuhn.uidesigner.model.BlockPos
 import dev.cypdashuhn.uidesigner.model.UiChest
 import dev.cypdashuhn.uidesigner.model.UiRow
 import dev.cypdashuhn.uidesigner.model.UiSlot
+import dev.rooster.region.Region
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.block.Block
 import org.bukkit.block.BlockFace

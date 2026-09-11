@@ -1,6 +1,8 @@
 # Architecture
 
-Single Gradle module. Packages under `dev.cypdashuhn.uidesigner`:
+One Gradle module in this repository (`UiDesigner`); the region and
+WorldEdit-selection types come from the `rooster-region` composite build
+(`:core`, `:worldedit`). Packages under `dev.cypdashuhn.uidesigner`:
 
 ```
 uidesigner/
@@ -12,10 +14,10 @@ uidesigner/
     BlockPos.kt              pure position value type + canonical ordering
     UiChest.kt               UiChest / UiRow / UiSlot + DesignJson config
   capture/
-    Region.kt                capture-side min/max corners + Bukkit world
     ChestContent.kt          capture-side intermediate: chest position + inventory
-    SelectionSource.kt       interface: player -> region (seam for tests)
-    FaweSelectionSource.kt   FAWE-backed implementation
+    RegionExt.kt             capture-local Region.blockAt lookup seam
+    SelectionSource.kt       interface: player -> dev.rooster.region.Region (seam for tests)
+    FaweSelectionSource.kt   rooster-region WorldEdit adapter
     ChestCapture.kt          selection source + player -> CapturedSelection? (region + contents)
     ChestScanner.kt          region -> list<ChestContent>, filters chest blocks
     DoubleChestGrouper.kt    merges double-chest halves into one design
@@ -32,23 +34,32 @@ uidesigner/
 
 ## Seams
 
-- **`SelectionSource`** isolates FAWE. `ChestScanner` takes a `Region` (which
-  carries its `World`), never touching WorldEdit directly, so `SelectionSource`
-  and `ChestScanner` are testable with fakes. `ChestCapture.capture(source,
-  player)` is the production entry point that glues the two: `null` means the
-  player has no usable selection; otherwise it returns a `CapturedSelection`
-  carrying the `Region` and its `List<ChestContent>` (empty when the selection
-  contained no chests). The plugin wires a lazy delegating `SelectionSource`
-  rather than `FaweSelectionSource` directly: FAWE is `compileOnly` and absent
-  from MockBukkit's classpath, and the delegation keeps `FaweSelectionSource`
-  from class-loading during `onEnable`. FAWE is also a hard `depend` in
-  `plugin.yml`, so a real server refuses to enable without it.
-- **`Region` is cuboid-only.** `FaweSelectionSource` reduces any FAWE selection
-  (including non-cuboid `//hcyl`/`//poly`) to its min/max bounding box, so a
-  chest inside the box but outside the actual selection is captured. Shape
-  fidelity is out of scope for the MVP. `Region.blockAt(BlockPos)` is the
-  shared `BlockPos` -> `World.getBlockAt` helper for the grouper and the
-  command.
+- **`SelectionSource`** isolates FAWE. `ChestScanner` takes a
+  `dev.rooster.region.Region` (which carries its `World`), never touching
+  WorldEdit directly, so `SelectionSource` and `ChestScanner` are testable with
+  fakes. `ChestCapture.capture(source, player)` is the production entry point
+  that glues the two: `null` means the player has no usable selection; otherwise
+  it returns a `CapturedSelection` carrying the `Region` and its
+  `List<ChestContent>` (empty when the selection contained no chests). The
+  region type and the WorldEdit selection conversion live in the sibling
+  `rooster-region` library, wired in as a Gradle composite build
+  (`settings.gradle.kts` maps `dev.rooster.region:rooster-region` to `:core` and
+  `dev.rooster.region:rooster-region-worldedit` to `:worldedit`). The plugin
+  wires a lazy delegating `SelectionSource` rather than `FaweSelectionSource`
+  directly: FAWE is `compileOnly` and absent from MockBukkit's classpath, and
+  the delegation keeps `FaweSelectionSource` from class-loading during
+  `onEnable`. FAWE is also a hard `depend` in `plugin.yml`, so a real server
+  refuses to enable without it.
+- **`Region` is cuboid-only.** `FaweSelectionSource` wraps the library adapter
+  and reduces any FAWE selection (including non-cuboid `//hcyl`/`//poly`) to its
+  min/max bounding box, so a chest inside the box but outside the actual
+  selection is captured. It also drops a stale selection whose world is not the
+  player's current world, because the library's `worldEditSelection()` keys off
+  the session's selection world (which survives a world change). Shape fidelity
+  is out of scope for the MVP. The library `Region` has no `blockAt` helper, so
+  `capture/RegionExt.kt` adds an `internal Region.blockAt(BlockPos)` extension
+  that the grouper and the command use for `BlockPos`-keyed lookups; the
+  scanner's int-triple loop calls `World.getBlockAt` directly.
 - **`model`** and **`export`** are pure Kotlin: no Bukkit imports. They are the
   easiest place to get coverage and the place where format correctness lives.
 - **`ChestContent` lives in `capture/`, not `model/`** (decided in 030): it holds
@@ -71,8 +82,9 @@ uidesigner/
   shared inventory).
 - **Grouper input contract (040/060).** `ChestContent` stays `position + items`
   only. `DoubleChestGrouper` receives the `Region` alongside the
-  `List<ChestContent>`, so it can reach each block via `region.blockAt(position)`;
-  060 reads chest names from the same blocks with `ChestNamer.nameOf(block)`.
+  `List<ChestContent>`, so it can reach each block via `region.blockAt(position)`
+  (the capture-local extension); 060 reads chest names from the same blocks with
+  `ChestNamer.nameOf(block)`.
   `items` is expected to be a positive multiple of 9 (the scanner captures 27, a
   merged double 54); the grouper fails fast otherwise rather than emitting a
   malformed `rows`.

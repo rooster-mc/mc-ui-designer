@@ -1,7 +1,6 @@
 package dev.cypdashuhn.uidesigner
 
 import dev.cypdashuhn.uidesigner.capture.FaweSelectionSource
-import dev.cypdashuhn.uidesigner.capture.Region
 import dev.cypdashuhn.uidesigner.capture.SelectionSource
 import dev.cypdashuhn.uidesigner.commands.ChestEditCommand
 import dev.cypdashuhn.uidesigner.commands.UiDesignerCommand
@@ -9,6 +8,7 @@ import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.jorel.commandapi.CommandAPI
 import dev.jorel.commandapi.CommandAPIPaperConfig
+import dev.rooster.region.Region
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin

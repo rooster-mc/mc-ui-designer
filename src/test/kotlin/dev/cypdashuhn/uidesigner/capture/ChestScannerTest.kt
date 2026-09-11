@@ -1,8 +1,10 @@
 package dev.cypdashuhn.uidesigner.capture
 
 import dev.cypdashuhn.uidesigner.model.BlockPos
+import dev.rooster.region.Region
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.block.Block
 import org.bukkit.block.Chest
@@ -160,8 +162,11 @@ class ChestScannerTest {
     private fun ItemStack.plainDisplayName(): String? =
         itemMeta?.displayName()?.let { PlainTextComponentSerializer.plainText().serialize(it) }
 
-    private fun region(minX: Int, minY: Int, minZ: Int, maxX: Int, maxY: Int, maxZ: Int,): Region =
-        Region.of(BlockPos(minX, minY, minZ), BlockPos(maxX, maxY, maxZ), world)
+    private fun region(minX: Int, minY: Int, minZ: Int, maxX: Int, maxY: Int, maxZ: Int): Region =
+        Region(
+            Location(world, minX.toDouble(), minY.toDouble(), minZ.toDouble()),
+            Location(world, maxX.toDouble(), maxY.toDouble(), maxZ.toDouble()),
+        )
 
     private fun blockAt(material: Material, x: Int, y: Int, z: Int): Block =
         world.getBlockAt(x, y, z).apply { type = material }

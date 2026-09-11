@@ -3,7 +3,9 @@ package dev.cypdashuhn.uidesigner.capture
 import dev.cypdashuhn.uidesigner.model.BlockPos
 import dev.cypdashuhn.uidesigner.model.UiChest
 import dev.cypdashuhn.uidesigner.model.UiRow
+import dev.rooster.region.Region
 import net.kyori.adventure.text.Component
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
@@ -419,7 +421,10 @@ class DoubleChestGrouperTest {
         flatMap { row -> row.slots.map { (row.row to it.slot) to it.item } }.toMap()
 
     private fun region(minX: Int, minZ: Int, maxX: Int, maxZ: Int): Region =
-        Region.of(BlockPos(minX, 0, minZ), BlockPos(maxX, 0, maxZ), world)
+        Region(
+            Location(world, minX.toDouble(), 0.0, minZ.toDouble()),
+            Location(world, maxX.toDouble(), 0.0, maxZ.toDouble()),
+        )
 
     private class FakeChestState(
         block: Block

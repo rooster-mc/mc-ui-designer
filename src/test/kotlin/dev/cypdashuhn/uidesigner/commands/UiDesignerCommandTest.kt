@@ -1,6 +1,5 @@
 package dev.cypdashuhn.uidesigner.commands
 
-import dev.cypdashuhn.uidesigner.capture.Region
 import dev.cypdashuhn.uidesigner.capture.SelectionSource
 import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
@@ -12,8 +11,10 @@ import dev.cypdashuhn.uidesigner.naming.ChestNamer
 import dev.cypdashuhn.uidesigner.util.Messages
 import dev.jorel.commandapi.CommandAPITestUtilities
 import dev.jorel.commandapi.MockCommandAPIPlugin
+import dev.rooster.region.Region
 import kotlinx.serialization.decodeFromString
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
@@ -582,7 +583,10 @@ class UiDesignerCommandTest {
         world.getBlockAt(x, y, z).apply { type = material }
 
     private fun region(minX: Int, minY: Int, minZ: Int, maxX: Int, maxY: Int, maxZ: Int): Region =
-        Region.of(BlockPos(minX, minY, minZ), BlockPos(maxX, maxY, maxZ), world)
+        Region(
+            Location(world, minX.toDouble(), minY.toDouble(), minZ.toDouble()),
+            Location(world, maxX.toDouble(), maxY.toDouble(), maxZ.toDouble()),
+        )
 
     private class FakeSelectionSource(
         private val region: Region?

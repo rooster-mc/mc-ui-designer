@@ -1,6 +1,7 @@
 package dev.cypdashuhn.uidesigner.capture
 
 import dev.cypdashuhn.uidesigner.model.BlockPos
+import dev.rooster.region.Region
 import org.bukkit.Material
 import org.bukkit.block.Chest
 
@@ -9,9 +10,9 @@ object ChestScanner {
 
     fun scan(region: Region): List<ChestContent> {
         val found = mutableListOf<ChestContent>()
-        for (x in region.min.x..region.max.x) {
-            for (y in region.min.y..region.max.y) {
-                for (z in region.min.z..region.max.z) {
+        for (x in region.minX..region.maxX) {
+            for (y in region.minY..region.maxY) {
+                for (z in region.minZ..region.maxZ) {
                     if (!region.world.isChunkLoaded(x shr 4, z shr 4)) continue
                     val block = region.world.getBlockAt(x, y, z)
                     if (block.type !in CHEST_MATERIALS) continue
