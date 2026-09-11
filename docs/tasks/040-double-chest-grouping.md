@@ -1,6 +1,6 @@
 ---
 name: Double-chest grouping
-status: in-progress
+status: done
 parent: MVP
 depends-on: [030]
 reviewers: [tester, correctness]
