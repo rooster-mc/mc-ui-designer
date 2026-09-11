@@ -110,3 +110,86 @@ Help/prefix/tab-completion polish is legitimately deferred to 070.
   `Messages.kt`; not worth churning inline strings now.
 - **`/uidesigner` integration.** Out of scope: 050 is deliberately a standalone
   top-level command, and 060 owns the `/uidesigner` tree.
+
+## Round 2
+### Verdict
+Ship. Both round-1 functional foot-guns are fixed: a double chest is now
+named/cleared on both halves, and `clear` is case-insensitive with blank input
+treated as clear. The remaining findings are feedback-wording nits that are
+legitimately 070's ("Review all error paths for actionable wording",
+"`/chest-edit` help/usage and completion"). The literal name "clear" is still
+unreachable, but the ticket mandates `/chest-edit clear`, the reservation is now
+documented in `docs/design.md:67-73`, and the player-facing escape hatch/help is
+a 070 concern.
+
+### Issues
+#### 1. A chest still cannot be named "clear", and the reservation is only documented for developers (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/ChestEditCommand.kt:56`;
+  `docs/design.md:71-73`
+- Problem: `rawName.equals("clear", ignoreCase = true)` reserves the word in
+  every casing, so a designer who wants a UI button labelled "Clear" (a very
+  plausible label in this tool) cannot set it. Round 1 called for either an
+  escape hatch or deliberate, documented reservation; the implementor chose the
+  latter, and `docs/design.md` now states "a literal name `clear` is
+  unreachable". That resolves the *specification* gap, but the reservation is
+  invisible to the player: no help, no tab completion, no on-screen hint, and
+  `/chest-edit clear` on an unnamed chest still replies
+  `Cleared this chest's name.` (issue 2), so the surprise is intact.
+- Suggested fix: acceptable to ship 050 as mandated. Make 070's `/chest-edit`
+  help text explicitly document that `clear` (any casing) and blank input remove
+  the name, so the reserved word is at least discoverable. If a literal "Clear"
+  label must be settable, note that an escape hatch is arguably *new
+  functionality*, which 070 explicitly excludes (`docs/tasks/070-ux-polish.md:27-28`);
+  file it as a small follow-up ticket rather than smuggling it into 070.
+
+#### 2. Clearing an already-unnamed chest still claims success (severity: low, deferred)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/ChestEditCommand.kt:41-42,56-58`
+- Problem: unchanged from round 1. `apply` returns `Outcome.Cleared` whenever the
+  target is a chest and the input is blank/`clear`, without checking whether a
+  name existed, so the message `Cleared this chest's name.` is printed for a
+  no-op. With issue 1 this also masks the "I meant to name it Clear" case: the
+  player sees a confident success for an action that destroyed nothing.
+- Suggested fix: in 070's error-path pass, check `ChestNamer.nameOf(target)`
+  first and reply e.g. `This chest has no name.` when already unnamed. Not a 050
+  blocker.
+
+#### 3. "Look at a chest to name it." still conflates air/out-of-range with a non-chest block (severity: low, deferred)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/ChestEditCommand.kt:43-44,55`
+- Problem: unchanged from round 1. `Outcome.NotAChest` covers a null raycast
+  result (looking at air / nothing in range), a looked-at non-chest block, and
+  being out of range; all three print the same line. A player aiming at a barrel
+  or stone is told to "look at a chest", which is not actionable.
+- Suggested fix: 070's "Review all error paths for actionable wording" owns
+  this; split into "not looking at a block / too far" vs "that block is not a
+  chest" (optionally naming the block type), consistent with 060's planned
+  no-selection/empty-selection wording. Not a 050 blocker.
+
+### Non-issues
+- **Double-chest naming writes both halves.** `ChestNamer.chestsOf(block)`
+  (`ChestNamer.kt:36-46`) resolves the `DoubleChest` holder and returns
+  `leftSide`/`rightSide`; `setName`/`clear` (`ChestNamer.kt:27-34`) iterate that
+  list, so both block entities get the same custom name (or both are nulled).
+  `nameOf` (`ChestNamer.kt:25`) uses `firstNotNullOfOrNull`, so a name set on
+  either half is read back. The GUI title now agrees on both halves and 040's
+  canonical half cannot silently lose the name — the round-1 issue is resolved.
+- **`clear` is case-insensitive; blank input clears.** `ChestEditCommand.kt:56`
+  matches `"clear"` with `ignoreCase = true`, so `Clear`/`CLEAR` clear instead of
+  renaming (round-1 issue 2 resolved), and `isBlank()` prevents an empty/whitespace
+  custom name. Both paths produce the existing `Cleared this chest's name.`
+  message, which is the right wording for the action.
+- **Feedback for the new paths still makes sense.** `Named this chest "X".` on
+  the rename path and `Cleared this chest's name.` on both the keyword and blank
+  paths are accurate for what the code does. Naming a double chest now really
+  does name "this chest" as the player perceives it, so the singular wording is
+  fine.
+- **Help/completion and message centralisation are correctly deferred.** 070
+  explicitly lists "`/chest-edit` help/usage and completion" and centralised
+  Adventure messages/prefix; nothing in 050 regressed here, and `/chest-edit`
+  still ships with no `withShortDescription`/no-arg executor exactly as 070
+  expects to fix.
+- **Presentation and permission unchanged.** Plain white, no prefix, single chat
+  line per command; `.withPermission("uidesigner.chest-edit")` still hides the
+  command from non-ops. Both remain 070's job (graceful denial, colour/prefix),
+  not a 050 defect.
+- **Command shape unchanged.** `/chest-edit <greedy name>` still matches
+  `docs/design.md` use-case step 6 and keeps spaces in multi-word labels.

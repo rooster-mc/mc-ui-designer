@@ -111,3 +111,119 @@ looked at or treated as canonical. Blank names and the 5-block reach are minor.
   `/chest-edit clear` syntax and is documented in the code comment; "Clear" and
   "CLEAR" are settable names. Case-sensitivity and the missing escape hatch are
   covered in the ux report.
+
+## Round 2
+### Verdict
+Ship. The round-1 high finding is genuinely fixed: `ChestNamer` now resolves the
+`DoubleChest` and writes/clears both halves, `nameOf` returns the first non-blank
+name across both halves, and blank/`clear` handling in `ChestEditCommand.apply`
+is case-insensitive. I traced the Paper implementation and the write path is
+sound, so no new functional defect was found. The remaining items are low: the
+production double-detection path (`chestsOf(block)`) has no test, a
+partially-loaded double is only named on one half, permission-denial feedback is
+still deferred, and the public `setName` still accepts blank.
+
+### Issues
+#### 1. The production double-chest detection path is never exercised (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/naming/ChestNamer.kt:36-39`;
+  `src/test/kotlin/dev/cypdashuhn/uidesigner/naming/ChestNamerTest.kt:105-129`
+- Problem: Every double-chest test calls the internal overload
+  `chestsOf(chest, holder)` with a hand-built `DoubleChest` proxy; no test calls
+  `ChestNamer.nameOf`/`setName`/`clear` on a real placed double chest, and
+  MockBukkit does not form one. The path that actually discovers the double in
+  production, `chest.inventory.holder`, is therefore unguarded: replacing
+  `chestsOf(block)` with `return listOf(chest)` keeps the suite green and
+  silently re-introduces round-1 issue 1. I verified against Paper 1.21.10
+  bytecode that `CraftChest.getInventory()` returns a `CraftInventoryDoubleChest`
+  when paired and `CraftInventoryDoubleChest.getHolder()` returns a `DoubleChest`
+  whose `getLeftSide()`/`getRightSide()` are `CraftChest` snapshots, so the code
+  is correct today; the gap is regression protection, not a live bug.
+- Repro: change `ChestNamer.chestsOf(block)` to skip the holder lookup; the whole
+  suite still passes while `/chest-edit` names only the looked-at half.
+- Suggested fix: add a test that drives `chestsOf(block)` (not the holder
+  overload) with a `Block` whose `state` is a fake `Chest` whose
+  `inventory.holder` is a `DoubleChest` (Mockito/`Proxy`), asserting both halves
+  are returned. If MockBukkit can place a real double, prefer that.
+
+#### 2. A partially-loaded double chest is only named/cleared on the looked-at half (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/naming/ChestNamer.kt:38,41-46`
+- Problem: `chest.inventory.holder` is a `DoubleChest` only when `ChestBlock` can
+  combine both halves; if the other half is in an unloaded chunk, it is a single
+  and `chestsOf` returns only the looked-at half. `/chest-edit clear` then leaves
+  the other half's old name in NBT, and once that chunk loads `nameOf` (which
+  reads both halves) returns the stale name, so the export still contains it.
+  This is the one case where the round-1 "clearing removes it from subsequent
+  exports" criterion can still fail.
+- Repro: name a double chest; move so only one half is loaded; `/chest-edit
+  clear` on the loaded half; load the other half; `ChestNamer.nameOf` returns the
+  old name.
+- Suggested fix: document the limitation in `docs/design.md`, or detect the
+  double from block data (facing + `Chest.Type.LEFT`/`RIGHT`, as 040's notes
+  allow) so both halves are reached regardless of chunk load. Low priority: 040
+  and the exporter also only see loaded halves.
+
+#### 3. Permission denial still has no explicit feedback (severity: low, deferred)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/ChestEditCommand.kt:31`
+- Problem: `.withPermission("uidesigner.chest-edit")` is a Brigadier `requires`
+  predicate, so an unauthorised player gets the vanilla unknown-command text
+  rather than the ticket's "no permission" feedback; the AC "Player feedback ...
+  on failure (not a chest, no permission)" is not met. Round 1 accepted deferral
+  to 070; it is still open.
+- Suggested fix: keep deferring to 070, or register without `.withPermission` and
+  check `player.hasPermission("uidesigner.chest-edit")` in the executor to send a
+  denial.
+
+#### 4. `ChestNamer.setName` still stores blank custom names when called directly (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/naming/ChestNamer.kt:27-30,48-51`
+- Problem: `ChestEditCommand.apply` guards blank input, but the public
+  `setName(block, name)` does not. `ChestNamer.setName(chest, "   ")` stores a
+  whitespace `Component` (blank GUI title) while `nameOf` normalises it to `null`
+  (unnamed in JSON), so the GUI and the eventual export disagree. No current
+  caller passes blank, but `setName` is the documented seam for the
+  exporter/command.
+- Repro: `ChestNamer.setName(chest, "   ")`; open the chest -> blank title;
+  `ChestNamer.nameOf(chest)` -> `null`.
+- Suggested fix: make `setName` treat `name.isBlank()` as `clear`, or reject
+  blank at the API boundary.
+
+### Non-issues
+- **Round-1 issue 1 is resolved.** `chestsOf` now returns `listOf(left, right)`
+  for a double and `nameOf` uses `firstNotNullOfOrNull(::readName)`, so naming
+  either half (via the write path) is visible from the canonical half and
+  clearing from either half removes both. Both round-1 failure scenarios no
+  longer reproduce.
+- **No recursion.** `chestsOf(chest, holder)` does not call `chestsOf(block)`;
+  the `DoubleChest` lookup terminates in `BlockEntity.getOwner()`.
+- **No stale-state / double-update bug.** `chestsOf(block)` uses the
+  `block.state` snapshot only for the fallback; for a double it returns fresh
+  `getOwner()` snapshots of each half. Each half is written exactly once
+  (`customName` + `update`), and `CraftContainer.customName` writes the
+  snapshot's `name` field, which `update` -> `copyData` applies to the live block
+  entity. The two halves are distinct block entities, so one update cannot revert
+  the other.
+- **Fallback is safe.** When the holder is not a `DoubleChest`, or one side fails
+  to cast to `Chest`, `chestsOf` returns `listOf(chest)` — the looked-at half —
+  which is the conservative choice.
+- **040 interaction is fine.** Because `setName`/`clear` write both halves,
+  040's canonical-half choice no longer determines whether the name is seen.
+  `nameOf` order (`DoubleChest.leftSide`/`rightSide`) is deterministic, and the
+  halves can only diverge through external NBT edits.
+- **Blank/whitespace handling is consistent.** `apply` maps `isBlank()` to
+  `Cleared`, and `readName` maps a blank serialised name to `null`, so
+  `docs/data-format.md`'s unnamed form is reached either way.
+- **Case-insensitive `clear`.** `rawName.equals("clear", ignoreCase = true)`
+  clears for `Clear`/`CLEAR`; the literal name "clear" is unreachable by design,
+  now documented in `docs/design.md`.
+- **`REACH = 5`.** Still above the 4.5 survival block reach, but the code now
+  documents it as intentional op tooling reach, which was round-1's accepted
+  alternative; not re-raised.
+- **`onLoad`/`onEnable` ordering.** `CommandAPI.onLoad` in `onLoad`,
+  `CommandAPI.onEnable()` + registration in `onEnable`, `CommandAPI.onDisable()`
+  in `onDisable` are the 11.2.0 lifecycle; the command executor and all block
+  access stay on the main thread.
+- **Trapped chests.** `Material.TRAPPED_CHEST` maps to the same
+  `org.bukkit.block.Chest` state, so `isChest` + `as? Chest` and the double path
+  are consistent; now covered by a round-trip test.
+- **No JSON output in this ticket**, so `docs/data-format.md` casing/ordering and
+  IO-failure/partial-write concerns do not apply here; `nameOf` returning
+  `String?` remains a workable seam for 060.

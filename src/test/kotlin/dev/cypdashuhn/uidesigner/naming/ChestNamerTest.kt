@@ -73,6 +73,7 @@ class ChestNamerTest {
 
         ChestNamer.setName(chest, "   ")
 
+        assertNull((chest.state as Chest).customName())
         assertNull(ChestNamer.nameOf(chest))
     }
 

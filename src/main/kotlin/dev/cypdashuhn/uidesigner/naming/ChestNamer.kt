@@ -15,7 +15,11 @@ object ChestNamer {
     fun nameOf(block: Block): String? = nameOf(chestsOf(block))
 
     fun setName(block: Block, name: String) {
-        setName(chestsOf(block), name)
+        if (name.isBlank()) {
+            clear(block)
+        } else {
+            setName(chestsOf(block), name)
+        }
     }
 
     fun clear(block: Block) {
