@@ -15,6 +15,7 @@ Read these before working:
 - `docs/data-format.md` — the authoritative JSON schema.
 - `docs/architecture.md` — package layout and seams.
 - `docs/workflow.md` — the review pipeline and report/ticket formats.
+- `docs/manual-test.md` — the gate for non-automatable acceptance criteria.
 - `docs/fcp.md` — how to correlate source files with docs.
 - `docs/tasks/` — the tickets.
 
@@ -59,10 +60,16 @@ Rules:
   is in `docs/workflow.md`.
 - Per ticket: implement, then run the ticket's `reviewers` in order, hand the
   reports back to `implementor`, commit, and repeat for a second round.
+- Reviewers are stateful: each is given the earlier reports for the round and
+  must not re-report their findings. Round 2 resumes the same sessions.
+- Findings carry no severity labels; a finding is work — fixed, or deferred to a
+  named ticket/gate with a reason.
 - Omit reviewers that are irrelevant; keep the order of those that remain.
 - Only `implementor` runs slow verification (build, `just test`, `just
   format`, the dev server) and must leave the tree green. Reviewers read and
   reason; they do not re-run it.
+- Non-automatable acceptance criteria are recorded in `docs/manual-test.md`;
+  the meta-orchestrator surfaces open entries when reporting a phase done.
 - Parallel tickets must be file-disjoint; otherwise the meta-orchestrator
   serializes them or isolates them in separate worktrees.
 

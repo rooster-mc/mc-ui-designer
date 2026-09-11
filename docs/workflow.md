@@ -8,22 +8,25 @@ Two orchestrator tiers, then workers. Nesting is two levels deep; opencode's
 `subagent_depth` defaults to `1` (no subagents of subagents), so this repo sets
 it to `2` in `.opencode/opencode.json`.
 
-| Agent | Tier | Job |
-|---|---|---|
-| `orchestrator` | primary | Owns the queue, picks unblocked tickets, manages branches/worktrees, launches one ticket-orchestrator per ticket. Never implements or reviews. |
-| `ticket-orchestrator` | subagent | Runs one ticket end to end by delegating to the workers. The only agent that may spawn them. |
-| `implementor` | worker | Implements the ticket and its tests. The only agent that edits source. |
-| `tester` | worker | Reviews test coverage: missing, excessive, brittle. |
-| `correctness` | worker | Hunts technical bugs, wrong behaviour, spec mismatches. |
-| `architecture` | worker | Checks fit with existing structure, extendability, over-generalisation. |
-| `readability` | worker | Checks clarity, file hygiene, formatting, followability. |
-| `ux` | worker | Checks the player-facing loop: actions, feedback, presentation. |
+| Agent | Tier | Job | Reports only on |
+|---|---|---|---|
+| `orchestrator` | primary | Owns the queue, picks unblocked tickets, manages branches/worktrees, launches one ticket-orchestrator per ticket. Never implements or reviews. | — |
+| `ticket-orchestrator` | subagent | Runs one ticket end to end by delegating to the workers. The only agent that may spawn them. | — |
+| `implementor` | worker | Implements the ticket and its tests. The only agent that edits source. | — |
+| `tester` | worker | Test quality (missing, excessive, brittle) and test-environment fidelity. | test files and harness limits only |
+| `correctness` | worker | Bugs, wrong behaviour, spec mismatches, data/integration contracts. | logic, state, data, integration only |
+| `architecture` | worker | Fit, extendability, seams, and doc staleness. | package structure and docs only |
+| `readability` | worker | Clarity, file hygiene, formatting, followability. | source structure/naming/format only |
+| `ux` | worker | The player-facing loop and feedback. | loop, feedback truthfulness, discoverability only |
+
+Scopes are **exclusive**: a reviewer reports only within its column. If a
+finding belongs to another role, leave it for that role — do not pad its own
+report with out-of-scope trivia.
 
 Subagents cannot spawn subagents unless their agent config declares a `task`
 permission; `ticket-orchestrator` does, scoped to the workers. Every reviewer
 owns exactly one report file, bound to its role (see
-[Review reports](#review-reports)); the ticket-orchestrator hands those reports
-back to `implementor`.
+[Review reports](#review-reports)).
 
 ## Meta-orchestration
 
@@ -41,16 +44,45 @@ Run by `ticket-orchestrator`:
 
 1. Read the ticket and its `reviewers` list.
 2. `implementor` implements it on the ticket's branch/worktree.
-3. Run the relevant reviewers in order: `tester`, `correctness`,
-   `architecture`, `readability`, `ux`.
-4. Hand all reports to `implementor` for fixes.
+3. For each reviewer in order, spawn it with the ticket, the round number, and
+   the paths to every **earlier report in this round**. It writes its own report.
+4. Hand **all** reports (not just the last) to `implementor`. Every finding must
+   be fixed, or explicitly deferred to a named ticket/gate with a reason.
 5. **Commit** the resulting state.
-6. Repeat steps 3–5 for a **second round**, so fixes from later reviewers do
-   not invalidate earlier ones.
-7. Mark the ticket `done` and commit.
+6. Round 2: **resume** the same reviewer and implementor sessions via `task_id`
+   and repeat steps 3–5, so later fixes cannot invalidate earlier reviews and
+   nothing reloads context from scratch.
+7. Record any acceptance criterion that cannot be automated in
+   `docs/manual-test.md` (see [Manual gate](#manual-gate)).
+8. Mark the ticket `done` and commit.
 
 Two rounds total per ticket. Omit stages that do not apply, but keep the order
 of those that remain.
+
+## Reviewer handoff (statefulness)
+
+Reviewers run in sequence, so each must know what the previous ones found.
+
+- The ticket-orchestrator passes the paths of every earlier report in the round
+  (`docs/reviews/<id>/<role>.md`) into each reviewer's prompt.
+- A reviewer must **not** re-report a finding already in a prior report. It may
+  **concur** (state agreement, add nothing) or **dissent** (explain why the prior
+  finding is wrong), and may add findings only within its own scope.
+- Findings carry **no severity labels**. If a reviewer flags it, it is treated as
+  work: it gets fixed, or deferred with a named target and a reason. Reviewers
+  therefore report only what they would actually stand behind.
+
+## Manual gate
+
+Some acceptance criteria cannot be automated (a real FAWE selection, an in-game
+click loop). Those go in `docs/manual-test.md`, each with a status and, when
+unverified, a reason.
+
+- A ticket may be `done` while it has an unverified manual entry, but the entry
+  must exist and name the ticket, so the gap is tracked rather than lost.
+- `tester` flags paths the test harness cannot exercise (e.g. MockBukkit cannot
+  form a real `DoubleChest`); those become manual-test entries.
+- The `orchestrator` surfaces open manual entries when reporting a phase done.
 
 ## Verification ownership
 
@@ -118,16 +150,19 @@ Report body per round:
 ### Verdict
 One or two sentences: ship / ship with fixes / needs rework.
 
-### Issues
-#### 1. <title> (severity: low|medium|high)
+### Findings
+#### 1. <title>
 - Location: path:line
 - Problem: what is wrong and why it matters
 - Suggested fix: concrete direction
 
-### Non-issues
-Things deliberately checked and found fine (keeps the implementor from
-re-litigating them).
+### Non-findings
+Things deliberately checked and found fine, and any prior-round finding you
+concur with (keeps the implementor from re-litigating them).
 ```
+
+No severity labels: a finding is work. If you would not stand behind fixing it,
+do not report it, or say why it should be deferred to a named target.
 
 The reviewer also returns a one-paragraph summary in its reply so the
 ticket-orchestrator can hand feedback to `implementor` without re-reading files.
@@ -136,5 +171,7 @@ ticket-orchestrator can hand feedback to `implementor` without re-reading files.
 
 - Acceptance criteria met.
 - Build, tests and lint pass.
-- Both review rounds completed and feedback resolved or explicitly deferred.
+- Both review rounds completed; every finding fixed or explicitly deferred to a
+  named ticket/gate with a reason.
+- Every non-automatable acceptance criterion recorded in `docs/manual-test.md`.
 - Ticket status set to `done` and committed.

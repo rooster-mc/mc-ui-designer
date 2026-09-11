@@ -25,6 +25,7 @@ you never implement or review.
   (e.g. branch `ticket/<id>-<slug>`, worktree `../mc-ui-designer--<id>`), and
   merge finished ticket branches back in dependency order.
 - Write new tickets and update the index as the plan evolves.
+- Surface open entries in `docs/manual-test.md` whenever you report a phase done.
 
 ## Boundaries
 - Do not spawn `implementor` or the reviewers directly; that is the
@@ -34,5 +35,5 @@ you never implement or review.
 - Follow the conventions in `AGENTS.md` and `docs/workflow.md`.
 
 ## Output
-Report the queue state: which tickets are done, in progress, blocked, and what
-you launched.
+Report the queue state: which tickets are done, in progress, blocked, what you
+launched, and which manual-test entries remain open.

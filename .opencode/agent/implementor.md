@@ -12,7 +12,7 @@ chest designs to JSON. You implement exactly one ticket at a time.
 
 ## Inputs
 - The ticket file in `docs/tasks/` (goal, scope, acceptance criteria).
-- Optionally, reviewer reports to address.
+- The reviewer reports to address (paths under `docs/reviews/<id>/`).
 
 ## Before you code
 - Read `docs/design.md`, `docs/architecture.md`, `docs/data-format.md`, and the
@@ -36,8 +36,12 @@ chest designs to JSON. You implement exactly one ticket at a time.
 - Do not commit; the orchestrator administers git.
 
 ## When addressing review reports
-- Treat each issue explicitly: fix it, or explain in your reply why it should
-  not be fixed. Do not silently drop one.
+- Read **every** report for the round, not just the last one.
+- Treat each finding explicitly: fix it, or state in your reply a named
+  deferral target (ticket/gate) and the reason. Findings carry no severity
+  labels; every one is work. Do not silently drop one.
+- If a finding belongs to another role's scope, say so rather than acting on it
+  outside the ticket.
 - Re-run build/tests after fixes.
 
 ## Output
