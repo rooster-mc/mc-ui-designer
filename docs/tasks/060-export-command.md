@@ -1,6 +1,6 @@
 ---
 name: "/uidesigner save export command"
-status: todo
+status: in-progress
 parent: MVP
 depends-on: [010, 020, 030, 040, 050]
 reviewers: [tester, correctness, architecture, readability, ux]
