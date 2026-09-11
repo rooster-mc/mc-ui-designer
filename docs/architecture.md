@@ -59,4 +59,4 @@ player + FAWE selection
 - Kotlin, `kotlinx-serialization`, CommandAPI, Adventure components.
 - No comments in code unless they explain non-obvious *why*.
 - Ktlint formatting via `.editorconfig` (max line 100).
-- Tests use backticked sentence names and JUnit 5.
+- Tests use backticked sentence names and JUnit 6.

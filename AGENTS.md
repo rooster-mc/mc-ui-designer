@@ -33,8 +33,6 @@ just test       # JUnit suite
 just format     # ktlint
 ```
 
-(If `justfile` targets do not exist yet, they are created by ticket 000.)
-
 ## Orchestration model
 
 Two orchestrator tiers, then workers:
@@ -86,5 +84,7 @@ Rules:
 
 ## Current status
 
-Planning/setup only. No code has been written yet. Start with ticket
-[`docs/tasks/000-project-setup.md`](docs/tasks/000-project-setup.md).
+Project setup is in place: the Gradle build, wrapper, ktlint, shaded jar,
+MockBukkit smoke test and `just` recipes exist, and `just run` boots Paper 26.2
+on `localhost:25000` with FAWE and UiDesigner. Continue with the next unblocked
+ticket in `docs/tasks/`.

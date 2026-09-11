@@ -5,7 +5,7 @@ default:
 
 # Build the shaded plugin jar
 build:
-    ./gradlew build shadowJar
+    ./gradlew build
 
 # Run a Paper dev server on localhost:25000 with FAWE
 run:

@@ -1,4 +1,5 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
     java
@@ -12,6 +13,8 @@ plugins {
 
 group = "dev.cypdashuhn"
 version = "1.0-SNAPSHOT"
+
+val faweVersion = "2.15.3"
 
 repositories {
     mavenCentral()
@@ -33,12 +36,13 @@ dependencies {
     implementation("dev.jorel:commandapi-paper-shade:11.2.0")
 
     compileOnly(platform("com.intellectualsites.bom:bom-newest:1.56"))
-    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core")
-    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit")
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:$faweVersion")
+    compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit:$faweVersion")
 
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v26.2:4.116.1")
+    // MockBukkit 4.116.1 targets Paper build 111; main stays on the server build.
     testImplementation("io.papermc.paper:paper-api:26.2.build.111-stable")
 }
 
@@ -50,46 +54,42 @@ bukkit {
     name = "UiDesigner"
     main = "dev.cypdashuhn.uidesigner.UiDesignerPlugin"
     apiVersion = "26.2"
-
-    commands {
-        register("uidesigner") {
-            description = "Export a chest design to JSON"
-            aliases = listOf("uid")
-        }
-        register("chest-edit") {
-            description = "Name the chest block you are looking at"
-        }
-    }
 }
 
 tasks.processResources {
     filesMatching("config.yml") {
-        expand(mapOf("defaultOutput" to project.property("uiDesigner.defaultOutput")))
+        filter<ReplaceTokens>(
+            "tokens" to mapOf("defaultOutput" to project.property("uiDesigner.defaultOutput")),
+            "beginToken" to "\${",
+            "endToken" to "}",
+        )
     }
 }
 
-val prepareRunServer =
-    tasks.register("prepareRunServer") {
+val writeDevServerFiles =
+    tasks.register("writeDevServerFiles") {
         val runDirectory = layout.projectDirectory.dir("run")
         val serverProperties = runDirectory.file("server.properties")
         val eula = runDirectory.file("eula.txt")
         outputs.files(serverProperties, eula)
+        outputs.upToDateWhen { false }
         doLast {
             runDirectory.asFile.mkdirs()
             serverProperties.asFile.writeText("server-port=25000\nonline-mode=false\n")
+            // Accept Mojang's EULA for the local dev server only.
             eula.asFile.writeText("eula=true\n")
         }
     }
 
 tasks.runServer {
-    dependsOn(prepareRunServer)
+    dependsOn(writeDevServerFiles)
     minecraftVersion("26.2")
     downloadPlugins {
         github(
             "IntellectualSites",
             "FastAsyncWorldEdit",
-            "2.15.3",
-            "FastAsyncWorldEdit-Paper-2.15.3.jar",
+            faweVersion,
+            "FastAsyncWorldEdit-Paper-$faweVersion.jar",
         )
     }
 }

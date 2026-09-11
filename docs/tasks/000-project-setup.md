@@ -48,3 +48,19 @@ the (empty) UiDesigner plugin loaded, plus a working build/test/run loop.
   document the manual jar drop as a fallback.
 - Reference: `/home/cyp/repos/extended-inventory/build.gradle.kts` for the
   exact plugin/dependency versions and `runServer` block.
+
+### Deviations from this ticket
+
+- `run-paper` `3.0.2` → `3.1.0`: `3.0.2` fails Gradle 9.7 task validation
+  (`downloadPlugins.elements` is missing an input/output annotation); `3.1.0`
+  fixes it and uses the current Paper Fill API v3.
+- JUnit 5 → `6.1.3`: MockBukkit `4.116.1` declares `junit-jupiter-api:6.1.3`.
+- FAWE is downloaded from the GitHub release instead of Hangar: Hangar's
+  `FastAsyncWorldEdit` versions have null `downloadUrl`s, and `2.15.4` has no
+  release assets, so `2.15.3` is the newest downloadable. The same `2.15.3` is
+  used for the `compileOnly` FAWE dependencies (the BOM still supplies their
+  transitive deps).
+- foojay toolchain resolver `0.8.0` → `1.0.0`.
+- The `plugin.yml` command declarations were removed: CommandAPI owns command
+  registration (tickets 050/060), so declaring them here would create a second
+  Brigadier node that shadows the CommandAPI command.

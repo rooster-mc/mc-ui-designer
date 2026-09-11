@@ -44,14 +44,17 @@ Out of scope (backlog):
 - **Excluded:** `rooster-ui` (we render nothing), `rooster-sql` (no database),
   `rooster-localization` (plain Adventure components are enough).
 - **Target:** Paper `26.2`, Java `25`, Kotlin `2.4.10`, matching the newest
-  sibling (`extended-inventory`). Build plugins: `run-paper` `3.0.2`,
-  `shadow` `8.3.6`, `plugin-yml` `0.6.0`.
+  sibling (`extended-inventory`). Build plugins: `run-paper` `3.1.0`,
+  `shadow` `8.3.6`, `plugin-yml` `0.6.0`, plus `kotlin("plugin.serialization")`
+  and `org.jlleitschuh.gradle.ktlint`.
 - **Serialization:** `kotlinx-serialization-json`, no Gson.
 - **Commands:** `dev.jorel:commandapi-paper-shade:11.2.0`, shaded.
 - **FAWE:** `com.fastasyncworldedit:FastAsyncWorldEdit-Core` +
-  `-Bukkit` (`compileOnly`, via the IntellectualSites BOM) and auto-downloaded
-  into the dev server by `run-paper`.
-- **Testing:** JUnit 5 + MockBukkit (`org.mockbukkit.mockbukkit:mockbukkit-v26.2`).
+  `-Bukkit` (`compileOnly`, pinned to `2.15.3`, with the IntellectualSites BOM
+  for transitive deps) and the matching `FastAsyncWorldEdit-Paper-2.15.3.jar`
+  auto-downloaded from GitHub releases by `run-paper` (Hangar's FAWE entries
+  have no download URLs).
+- **Testing:** JUnit 6 + MockBukkit (`org.mockbukkit.mockbukkit:mockbukkit-v26.2`).
   Pure logic (model, JSON, grouping math) stays Bukkit-free where possible.
 - **Config:** `config.yml` read through Bukkit's `FileConfiguration`; the
   default output path is a Gradle property (`uiDesigner.defaultOutput`) filtered
