@@ -19,10 +19,6 @@ import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import java.nio.file.Path
 
-private const val WRITE_FAILURE_HINT = "check that the output folder exists and is writable"
-private const val RELOAD_FAILURE_HINT = "check config.yml and the server log"
-private const val INVALID_OUTPUT_HINT = "check the output-file setting"
-
 class UiDesignerCommand(
     private val plugin: JavaPlugin,
     private val selectionSource: SelectionSource,
@@ -42,11 +38,11 @@ class UiDesignerCommand(
 
         data class WriteFailed(
             val outputFile: Path?,
-            val reason: String,
+            val reason: String?,
         ) : SaveOutcome
 
         data class InvalidOutputFile(
-            val reason: String,
+            val reason: String?,
         ) : SaveOutcome
     }
 
@@ -64,7 +60,7 @@ class UiDesignerCommand(
         ) : ReloadOutcome
 
         data class Failed(
-            val reason: String,
+            val reason: String?,
         ) : ReloadOutcome
     }
 
@@ -114,7 +110,7 @@ class UiDesignerCommand(
             try {
                 configProvider().outputFile
             } catch (e: Exception) {
-                return SaveOutcome.InvalidOutputFile(e.message ?: INVALID_OUTPUT_HINT)
+                return SaveOutcome.InvalidOutputFile(e.message)
             }
         return try {
             exporter(named, outputFile)
@@ -134,11 +130,11 @@ class UiDesignerCommand(
                 ReloadResult.InvalidOutput -> ReloadOutcome.InvalidOutput(outputFile)
             }
         } catch (e: Exception) {
-            ReloadOutcome.Failed(e.message ?: RELOAD_FAILURE_HINT)
+            ReloadOutcome.Failed(e.message)
         }
 
     private fun failure(e: Exception, outputFile: Path?): SaveOutcome.WriteFailed =
-        SaveOutcome.WriteFailed(outputFile, e.message ?: WRITE_FAILURE_HINT)
+        SaveOutcome.WriteFailed(outputFile, e.message)
 
     private fun nameAt(region: Region, position: BlockPos): String? =
         ChestNamer.nameOf(region.blockAt(position))

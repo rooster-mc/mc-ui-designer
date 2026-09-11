@@ -223,7 +223,7 @@ class UiDesignerCommandTest {
     }
 
     @Test
-    fun `save reports an unusable config path with a fallback hint`() {
+    fun `save reports an unusable config path without a message`() {
         blockAt(Material.CHEST, 0, 0, 0)
         val command =
             UiDesignerCommand(
@@ -235,10 +235,7 @@ class UiDesignerCommandTest {
 
         val outcome = command.save(player)
 
-        assertEquals(
-            UiDesignerCommand.SaveOutcome.InvalidOutputFile("check the output-file setting"),
-            outcome,
-        )
+        assertEquals(UiDesignerCommand.SaveOutcome.InvalidOutputFile(null), outcome)
     }
 
     @Test

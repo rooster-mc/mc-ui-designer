@@ -20,6 +20,10 @@ object Messages {
             "/chest-edit <name> (op) - name or clear the chest you are looking at.\n" +
             "/uidesigner help - show this help."
 
+    private const val WRITE_FAILURE_HINT = "check that the output folder exists and is writable"
+    private const val RELOAD_FAILURE_HINT = "check config.yml and the server log"
+    private const val INVALID_OUTPUT_HINT = "check the output-file setting"
+
     fun help(): Component = styled(infoColor, HELP_TEXT)
 
     fun saveSuccess(chests: Int, outputFile: Path): Component {
@@ -40,19 +44,16 @@ object Messages {
                 "(loaded chunks only).",
         )
 
-    fun writeFailed(outputFile: Path?, reason: String): Component {
+    fun writeFailed(outputFile: Path?, reason: String?): Component {
         val target = outputFile?.let { " to $it" } ?: ""
-        return styled(
-            errorColor,
-            "Could not write the export$target: ${withTrailingPeriod(reason)}",
-        )
+        val detail = withTrailingPeriod(reasonOrDefault(reason, WRITE_FAILURE_HINT))
+        return styled(errorColor, "Could not write the export$target: $detail")
     }
 
-    fun invalidOutputFile(reason: String): Component =
-        styled(
-            errorColor,
-            "The configured output path is not usable: ${withTrailingPeriod(reason)}",
-        )
+    fun invalidOutputFile(reason: String?): Component {
+        val detail = withTrailingPeriod(reasonOrDefault(reason, INVALID_OUTPUT_HINT))
+        return styled(errorColor, "The configured output path is not usable: $detail")
+    }
 
     fun reloadSuccess(outputFile: Path): Component =
         styled(successColor, "Reloaded config.yml. Output file: $outputFile.")
@@ -70,8 +71,10 @@ object Messages {
                 "Output file: $outputFile.",
         )
 
-    fun reloadFailed(reason: String): Component =
-        styled(errorColor, "Could not reload config.yml: ${withTrailingPeriod(reason)}")
+    fun reloadFailed(reason: String?): Component {
+        val detail = withTrailingPeriod(reasonOrDefault(reason, RELOAD_FAILURE_HINT))
+        return styled(errorColor, "Could not reload config.yml: $detail")
+    }
 
     fun chestEditNamed(name: String): Component =
         styled(successColor, "Named this chest \"$name\".")
@@ -105,6 +108,9 @@ object Messages {
             .append(Component.text(PREFIX).color(prefixColor))
             .append(body)
             .build()
+
+    private fun reasonOrDefault(reason: String?, fallback: String): String =
+        reason?.takeIf { it.isNotBlank() } ?: fallback
 
     private fun withTrailingPeriod(text: String): String = text.trim().trimEnd('.') + "."
 }

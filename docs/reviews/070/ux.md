@@ -155,3 +155,78 @@ on a semantically bad `output-file`.
   a hard failure (the plugin does fall back to a working default), so yellow
   rather than red is a reasonable signal; the wording already says
   `could not be read`.
+
+## Round 2
+### Verdict
+Ship. All six round-1 findings are resolved in `5e1199c` and I found no new
+player-facing regression. The four acceptance criteria (bare `/uidesigner` help,
+subcommand tab completion, clear denial with no stack trace, consistent
+prefix/colour) still hold, and the failure wording now distinguishes the cases
+the round-1 report called out.
+
+### Issues
+None blocking. One optional nit, not worth another round:
+
+#### 1. `reloadInvalidOutput` does not say the bad key is left in place (severity: low, optional)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/util/Messages.kt:66-71`
+- Problem: the player reads `output-file in config.yml is not a valid path; using
+  defaults. Output file: X.` — accurate and actionable — but nothing tells them
+  the key was deliberately *not* rewritten, so they may expect the next reload
+  to be clean. This is exactly the wording round 1 suggested, so it is a polish
+  idea, not a regression; the message already names the key, the fallback, and
+  the resulting path.
+- Suggested fix: optionally append `Fix or remove it to silence this warning.`
+  Not required for this ticket.
+
+### Non-issues
+- **Round-1 issue 1 (no-target vs non-chest) resolved.** `apply` now returns
+  `Outcome.NoTarget` for a null raycast and `Outcome.NotAChest` for a
+  non-chest block (`ChestEditCommand.kt:71-72`), mapped to distinct red lines:
+  `"Not looking at a chest (or it is out of reach)."` and
+  `"That block is not a chest."` (`Messages.kt:83-86`). The old "to name it"
+  verb is gone, and the wording is neutral for both the name and clear paths.
+- **Round-1 issue 2 (clearing an unnamed chest) resolved.** `apply` reads
+  `ChestNamer.nameOf(target)` first and returns `Outcome.NothingToClear` when
+  there is nothing to remove (`ChestEditCommand.kt:74-77`), which prints the
+  yellow `"This chest has no name."` (`Messages.kt:81`). `"Cleared this chest's
+  name."` is now only emitted when a name was actually removed.
+- **Round-1 issue 3 (wrong-typed `output-file`) resolved.**
+  `UiDesignerConfig.hasUnusableOutputFile()` flags a set-but-non-String value
+  (`UiDesignerConfig.kt:13-14`), `writeDefaultOutputIfBlank()` refuses to rewrite
+  it (`UiDesignerConfig.kt:17`), and `reloadConfiguration()` returns
+  `ReloadResult.InvalidOutput` without calling `saveConfig()`
+  (`UiDesignerPlugin.kt:61-67`). The player sees the yellow
+  `"output-file in config.yml is not a valid path; using defaults. Output file:
+  X."` (`Messages.kt:66-71`) instead of a green success, and the file is left
+  untouched (`UiDesignerPluginTest` asserts the exact text and the unchanged
+  file).
+- **Round-1 issue 4 (exception class names) resolved.** The
+  `e.message ?: e.javaClass.simpleName` fallbacks are gone. `failure` now falls
+  back to `"check that the output folder exists and is writable"`
+  (`UiDesignerCommand.kt:22,141`), reload to `"check config.yml and the server
+  log"` (`:23,137`), and an unusable config path to `"check the output-file
+  setting"` (`:24,117`). `sentence()` was renamed to `withTrailingPeriod`, so
+  the hints still end with a period.
+- **Round-1 issue 5 (help discovery) resolved.** `HELP_TEXT` now includes
+  `/chest-edit <name> (op) - name or clear the chest you are looking at.` and
+  marks `save`/`reload` as `(op)` (`Messages.kt:16-21`); `/chest-edit` is no
+  longer invisible to a designer reading help. Pinned by `MessagesTest` and
+  `UiDesignerCommandTest`.
+- **Round-1 issue 6 (denial names the node) resolved.** `noPermission(node)`
+  renders `"You do not have permission to use this command (uidesigner.save)."`
+  (`Messages.kt:95-96`) and each executor passes its own constant
+  (`ChestEditCommand.kt:44`, `UiDesignerCommand.kt:75,88`), so an operator can
+  see exactly which node to grant.
+- **Acceptance criteria still met.** Bare `/uidesigner` and `/uidesigner help`
+  both run `helpExecutor` with no permission check (`UiDesignerCommand.kt:80,98`);
+  CommandAPI still surfaces `save|reload|help` and `/chest-edit` still suggests
+  `clear`; denials are single prefixed red chat lines; `MessagesTest` pins the
+  aqua prefix, green/red/yellow palette, and trailing period for every message,
+  including the new ones (`invalidOutputFile`, `reloadInvalidOutput`,
+  `chestEditNothingToClear`, `chestEditNoTarget`).
+- **Whitespace handling is now consistent with design.md.** `apply` trims before
+  comparing, so `  clear  ` clears and `  Shop  ` names `"Shop"`
+  (`ChestEditCommand.kt:73-80`), matching the design note updated in this commit.
+- **No new silent-success or spam regressions.** Each path emits exactly one
+  line; the new warnings are yellow and the errors red; `reload()` and `save()`
+  still catch exceptions and never let a stack trace reach the player.

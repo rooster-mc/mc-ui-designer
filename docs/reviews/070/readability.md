@@ -101,3 +101,92 @@ and three naming/doc nits — and none needs a rewrite.
   prefix, palette, and trailing period; the command tests keep backticked
   behaviour names and reuse `registeredCommand`/`unregisteredCommand`,
   `opPlayer`, and `plainMessage` helpers rather than re-wiring constructors.
+
+## Round 2
+### Verdict
+Ship. All four round-1 findings are resolved, and the new `ReloadResult` /
+split-`Outcome` shapes are a clear readability improvement. The fix commit
+introduces only two low-severity nits — three player-facing fallback hints that
+sit outside `Messages`, and a stranded word in a reflowed `architecture.md`
+paragraph. Neither needs a rewrite.
+
+### Issues
+
+#### 1. Failure-hint wording lives in the command class, not `Messages` (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/UiDesignerCommand.kt:22-24`
+- Problem: `WRITE_FAILURE_HINT`, `RELOAD_FAILURE_HINT`, and `INVALID_OUTPUT_HINT`
+  are static, player-facing English sentences ("check that the output folder
+  exists and is writable", ...). They are the one place a reader finds user
+  wording outside `Messages`, and they contradict `architecture.md:123-125`
+  ("`Messages` owns every player-facing component (prefix, colour, wording)")
+  and the ticket's "prefer centralising messages in `util/Messages.kt`" note.
+  A reader editing copy now has two files to check.
+- Suggested fix: move the three strings into `Messages` (e.g. as fallback
+  defaults inside `writeFailed`/`reloadFailed`/`invalidOutputFile`, or named
+  `Messages` constants the command references) so the message surface stays in
+  one file. The command then keeps only the `e.message ?: <Messages.fallback>`
+  selection.
+
+#### 2. Stranded "owns" line in the reflowed architecture bullet (severity: low)
+- Location: `docs/architecture.md:123-125`
+- Problem: the permission paragraph was re-wrapped by this commit and now reads
+  `... `Messages`\n  owns\n  every player-facing component ...`, leaving the
+  single word "owns" alone on a line. It is a small but visible break in an
+  otherwise evenly wrapped document, and it sits in the exact paragraph this
+  ticket edited.
+- Suggested fix: reflow those three lines so "owns" rejoins the sentence
+  (e.g. `...; \`Messages\` owns every player-facing component (prefix, colour,`
+  `wording).`).
+
+### Non-issues
+- **Round-1 issue 1 resolved (Boolean contract).** `reloadConfiguration()`
+  returns the self-describing `ReloadResult` enum
+  (`UiDesignerPlugin.kt:47-75`), and `UiDesignerCommand.reload()` maps it with
+  an exhaustive `when` (`UiDesignerCommand.kt:127-138`). The local `readable`
+  remains, but it is now a private branch input rather than the public
+  contract, so a caller no longer has to trace `reload()` to learn what the
+  return means. The absent-file case still falls through to `Reloaded`, which
+  is a defensible "fresh install reloaded defaults" reading and no longer
+  creates a name/outcome disagreement at the API.
+- **Round-1 issue 2 resolved (helper name).** `Messages.sentence` is now
+  `withTrailingPeriod` (`Messages.kt:109`), which says exactly what it does at
+  all three call sites; the static-vs-dynamic punctuation split is unchanged but
+  now self-evident.
+- **Round-1 issue 3 resolved (failure naming).** `SaveOutcome.WriteFailed` now
+  means only a write failure; the config-read path is its own
+  `SaveOutcome.InvalidOutputFile` (`UiDesignerCommand.kt:48-50,113-118`), and
+  `ReloadOutcome.Failed` is the generic reload failure. The residual
+  `WriteFailed` vs `Failed` asymmetry is now semantic rather than accidental,
+  and `InvalidOutputFile` vs the two `InvalidOutput` names read fine in their
+  own layers. No further rename needed.
+- **Round-1 issue 4 resolved (architecture permission sentence).**
+  `architecture.md:118-120` now names `uidesigner.chest-edit`, the tree entry
+  carries it (`:28`), and `noPermission(node)` is documented. The node is
+  discoverable from architecture alone.
+- **`config/ReloadResult.kt` is a clean 7-line enum.** Three named constants,
+  no members, no helpers; it reads at a glance and is listed in the
+  architecture tree (`architecture.md:10`).
+- **The split `/chest-edit` outcomes are self-describing.** `NoTarget` vs
+  `NotAChest` vs `NothingToClear` vs `Cleared` (`ChestEditCommand.kt:20-32`)
+  each map to a distinct `Messages` line, and `apply`'s flow is a direct
+  sequence of guards (`:70-81`). The extra comment sentence on trimming
+  (`:68-69`) explains a non-obvious *why* and earns its place.
+- **Exhaustive `when`s, no `else` escape hatches.** `saveMessage`,
+  `reloadMessage` (`UiDesignerCommand.kt:146-161`), the `ReloadResult` mapping
+  (`:131-135`), and the `Outcome` dispatch (`ChestEditCommand.kt:49-58`) all
+  enumerate every variant, so a new variant will fail to compile rather than
+  silently fall through.
+- **No inline player-facing literals in the command flow.** Apart from the
+  named hint constants in issue 1, every `sendMessage` argument is a `Messages`
+  call (`rg` over `commands/` confirms), and the only literals left in the
+  command classes are the three permission-node constants.
+- **Formatting.** Every changed Kotlin file is within the 100-column
+  `.editorconfig` limit (checked), and the `when`/branch indentation matches the
+  surrounding ktlint style. The awkward doc wrap in issue 2 is prose, not code.
+- **`writeDefaultOutputIfBlank()` keeps its own guard.** The duplicate
+  `hasUnusableOutputFile()` check (`UiDesignerConfig.kt:13-21`) is redundant on
+  the reload path but protects the method's standalone invariant; it is
+  defensible, not dead code.
+- **Docs track the new shapes.** `architecture.md` gains the `ReloadResult`
+  tree entry and the reload-outcome sentence; `design.md:85-88` records the
+  trimming and the "nothing to clear" outcome. Both changes are accurate.

@@ -121,8 +121,7 @@ uidesigner/
   no permission. The nodes are declared in `build.gradle.kts`
   and checked inside each executor, so a missing permission sends
   `Messages.noPermission(node)` rather than failing at parse time; `Messages`
-  owns
-  every player-facing component (prefix, colour, wording). `reload`, `help`,
+  owns every player-facing component (prefix, colour, wording). `reload`, `help`,
   and the root accept any sender (console included); only `save` is
   player-only. CommandAPI suggests the registered subcommand literals
   automatically, and `/chest-edit` adds a `clear` suggestion for its optional

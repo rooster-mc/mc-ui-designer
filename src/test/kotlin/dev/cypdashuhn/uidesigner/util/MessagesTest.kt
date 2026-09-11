@@ -121,6 +121,16 @@ class MessagesTest {
     }
 
     @Test
+    fun `failure messages fall back to a hint when the reason is blank`() {
+        assertTrue(plain(Messages.writeFailed(path, null)).contains("output folder"))
+        assertTrue(plain(Messages.writeFailed(path, "  ")).contains("output folder"))
+        assertTrue(
+            plain(Messages.invalidOutputFile(null)).contains("check the output-file setting")
+        )
+        assertTrue(plain(Messages.reloadFailed(null)).contains("check config.yml"))
+    }
+
+    @Test
     fun `chest edit failure wording distinguishes no target from a non-chest`() {
         val noTarget = plain(Messages.chestEditNoTarget())
         val notAChest = plain(Messages.chestEditNotAChest())
@@ -150,11 +160,14 @@ class MessagesTest {
             "noChests" to Messages.noChests(),
             "writeFailed" to Messages.writeFailed(path, "disk full"),
             "writeFailedWithoutPath" to Messages.writeFailed(null, "disk full"),
+            "writeFailedFallback" to Messages.writeFailed(path, null),
             "invalidOutputFile" to Messages.invalidOutputFile("bad path"),
+            "invalidOutputFileFallback" to Messages.invalidOutputFile(null),
             "reloadSuccess" to Messages.reloadSuccess(path),
             "reloadUsingDefaults" to Messages.reloadUsingDefaults(path),
             "reloadInvalidOutput" to Messages.reloadInvalidOutput(path),
             "reloadFailed" to Messages.reloadFailed("bad config"),
+            "reloadFailedFallback" to Messages.reloadFailed(null),
             "chestEditNamed" to Messages.chestEditNamed("Shop"),
             "chestEditCleared" to Messages.chestEditCleared(),
             "chestEditNothingToClear" to Messages.chestEditNothingToClear(),
