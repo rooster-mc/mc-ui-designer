@@ -2,12 +2,15 @@ package dev.cypdashuhn.uidesigner.capture
 
 import dev.cypdashuhn.uidesigner.model.BlockPos
 import org.bukkit.World
+import org.bukkit.block.Block
 
 class Region private constructor(
     val min: BlockPos,
     val max: BlockPos,
     val world: World,
 ) {
+    fun blockAt(position: BlockPos): Block = world.getBlockAt(position.x, position.y, position.z)
+
     companion object {
         fun of(cornerA: BlockPos, cornerB: BlockPos, world: World): Region {
             val min =

@@ -66,6 +66,7 @@ bukkit {
     name = "UiDesigner"
     main = "dev.cypdashuhn.uidesigner.UiDesignerPlugin"
     apiVersion = "26.2"
+    depend = listOf("FastAsyncWorldEdit")
 }
 
 tasks.processResources {

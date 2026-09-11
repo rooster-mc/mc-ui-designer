@@ -230,6 +230,19 @@ class JsonExporterTest {
         }
     }
 
+    @Test
+    fun `a failed export leaves the previous file intact`(
+        @TempDir directory: Path
+    ) {
+        val target = directory.resolve("design.json")
+        Files.writeString(target, "previous")
+        val chests = listOf(UiChest(name = "Shop", rows = 3, content = emptyList()))
+
+        assertThrows<IllegalArgumentException> { JsonExporter.export(chests, target) }
+
+        assertEquals("previous", Files.readString(target))
+    }
+
     private fun chest(name: String?, position: BlockPos, vararg content: UiRow) =
         UiChest(name = name, rows = 3, content = content.toList(), position = position)
 

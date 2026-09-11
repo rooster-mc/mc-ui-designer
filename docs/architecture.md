@@ -37,11 +37,16 @@ uidesigner/
   player)` is the production entry point that glues the two: `null` means the
   player has no usable selection; otherwise it returns a `CapturedSelection`
   carrying the `Region` and its `List<ChestContent>` (empty when the selection
-  contained no chests).
+  contained no chests). The plugin wires a lazy delegating `SelectionSource`
+  rather than `FaweSelectionSource` directly: FAWE is `compileOnly` and absent
+  from MockBukkit's classpath, and the delegation keeps `FaweSelectionSource`
+  from class-loading during `onEnable`.
 - **`Region` is cuboid-only.** `FaweSelectionSource` reduces any FAWE selection
   (including non-cuboid `//hcyl`/`//poly`) to its min/max bounding box, so a
   chest inside the box but outside the actual selection is captured. Shape
-  fidelity is out of scope for the MVP.
+  fidelity is out of scope for the MVP. `Region.blockAt(BlockPos)` is the
+  shared `BlockPos` -> `World.getBlockAt` helper for the grouper and the
+  command.
 - **`model`** and **`export`** are pure Kotlin: no Bukkit imports. They are the
   easiest place to get coverage and the place where format correctness lives.
 - **`ChestContent` lives in `capture/`, not `model/`** (decided in 030): it holds
@@ -97,11 +102,22 @@ uidesigner/
   whose partner half is absent from `contents` stays a single 3-row entry built
   from that half's own 27 captured slots; the grouper never reads the
   unselected half. Consumed positions keep a merged double's halves from being
-  emitted twice. The grouper returns `UiChest` with `name = null` (naming is
-  060) and does not order; `JsonExporter` remains the ordering authority.
+  emitted twice. The grouper returns `UiChest` with `name = null` and does not
+  order; `UiDesignerCommand` populates names via `ChestNamer.nameOf` at each
+  canonical position, and `JsonExporter` remains the ordering authority.
 - **Chest predicate duplication.** `ChestScanner` and `ChestNamer` each define
   their own chest-material check; this is a deliberate carry-over until a third
   consumer appears, then extract one shared `isChest`.
+- **`UiDesignerCommand`** is the integration point for `/uidesigner save |
+  reload | help`. It composes `ChestCapture`, `DoubleChestGrouper`,
+  `ChestNamer`, and `JsonExporter` without owning their logic, and injects
+  `SelectionSource`, a `() -> UiDesignerConfig` provider, a reload action, and
+  an exporter function so the pipeline is unit-testable without CommandAPI
+  dispatch. `save` runs on the CommandAPI player executor (main thread); file
+  IO stays synchronous for the MVP. `save` requires `uidesigner.save` and
+  `reload` requires `uidesigner.reload`, both defaulting to op; `help` and the
+  bare root need no permission. `reload`, `help`, and the root accept any
+  sender (console included); only `save` is player-only.
 - **`JsonExporter`** is the single ordering authority: it sorts chests by
   canonical position and rows/slots by index. The grouper (040) merges double
   chests and must not re-sort; the exporter normalises order.
@@ -120,7 +136,10 @@ player + FAWE selection
         │  DoubleChestGrouper(selection.region, selection.contents)
         │  -> region.world.getBlockAt(position.x, position.y, position.z)
         ▼
-  List<UiChest>               (double chests merged; JsonExporter owns ordering)
+  List<UiChest>               (double chests merged; names still null)
+        │  UiDesignerCommand: ChestNamer.nameOf at each canonical position
+        ▼
+  List<UiChest>               (names populated)
         │  JsonExporter
         ▼
         JSON file (config.outputFile)

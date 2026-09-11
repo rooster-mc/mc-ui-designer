@@ -42,7 +42,7 @@ object DoubleChestGrouper {
         byPosition: Map<BlockPos, ChestContent>,
         consumed: Set<BlockPos>,
     ): DoubleMatch? {
-        val block = region.world.getBlockAt(position.x, position.y, position.z)
+        val block = region.blockAt(position)
         val chest = block.state as? Chest ?: return null
         val holder = chest.inventory.holder as? DoubleChest
         if (holder != null) {
@@ -73,7 +73,7 @@ object DoubleChestGrouper {
 
     private fun isComplementaryHalf(region: Region, partner: BlockPos, data: ChestData): Boolean {
         val partnerData =
-            region.world.getBlockAt(partner.x, partner.y, partner.z).blockData as? ChestData
+            region.blockAt(partner).blockData as? ChestData
                 ?: return false
         return partnerData.facing == data.facing && partnerData.type == opposite(data.type)
     }

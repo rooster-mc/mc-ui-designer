@@ -1,6 +1,8 @@
 package dev.cypdashuhn.uidesigner
 
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
+import dev.jorel.commandapi.CommandAPITestUtilities
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.configuration.file.YamlConfiguration
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -9,11 +11,14 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockbukkit.mockbukkit.MockBukkit
+import org.mockbukkit.mockbukkit.ServerMock
 
 class UiDesignerPluginTest {
+    private lateinit var server: ServerMock
+
     @BeforeEach
     fun setUp() {
-        MockBukkit.mock()
+        server = MockBukkit.mock()
     }
 
     @AfterEach
@@ -27,6 +32,21 @@ class UiDesignerPluginTest {
 
         assertEquals("UiDesigner", plugin.name)
         assertTrue(plugin.isEnabled)
+    }
+
+    @Test
+    fun `plugin registers the uidesigner command`() {
+        MockBukkit.load(UiDesignerPlugin::class.java)
+        val player = server.addPlayer()
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner help")
+
+        val message =
+            PlainTextComponentSerializer
+                .plainText()
+                .serialize(checkNotNull(player.nextComponentMessage()))
+        assertTrue(message.contains("save"))
     }
 
     @Test

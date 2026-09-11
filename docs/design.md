@@ -76,7 +76,10 @@ Out of scope (backlog):
   the loaded half; 040 and the exporter likewise only see loaded halves.
   `/chest-edit clear` (case-insensitive) is
   reserved for removal and blank input also clears, so a literal name "clear"
-  is unreachable.
+  is unreachable. For an unlinked geometry-merged double (no `DoubleChest`
+  holder), `nameOf` sees only the canonical half, so a name on the other half
+  is not exported; carrying both merged positions out of the grouper is
+  deferred.
 - **One half selected:** a chest whose partner half is outside the selection is
   exported as a single 3-row chest from the selected half only. The selection
   is authoritative, so the grouper never reads an unselected half. A merged
