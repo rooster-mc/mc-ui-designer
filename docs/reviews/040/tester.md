@@ -38,3 +38,69 @@ fallback is the route these tests exist to pin.
 - No integration test is expected here: wiring `grouper → JsonExporter` is explicitly 060's scope (`docs/tasks/060-export-command.md:15-16`), and `DoubleChestGrouper.group` is not yet called from production.
 - No excessive tests. The four orientation tests and the two canonical-position tests are cheap, each pins a named acceptance criterion, and `slotItems()` (`:287`) is a reasonable assertion helper. Duplicate-slot masking by `toMap()` is backstopped by the `sumOf { it.slots.size } == 54` assertion at `:178`.
 - Tests follow repo conventions: backticked sentence names, JUnit 6, MockBukkit `mock`/`unmock` per test.
+
+## Round 2
+### Verdict
+Ship with fixes. All four round 1 issues are genuinely resolved and the two new
+correctness regression tests fail against the old behaviour; the one remaining
+gap is that the new right-first orientation tests assert aggregate counts rather
+than which half lands in rows 1-3, so the fallback's half ordering is still
+unpinned.
+
+### Issues
+#### 1. Right-first orientation tests still don't pin the merged half ordering (severity: low)
+- Location: `src/test/kotlin/dev/cypdashuhn/uidesigner/capture/DoubleChestGrouperTest.kt:289-314` (assertions at `:309-313`); impl `DoubleChestGrouper.kt:85-89`.
+- Problem: The round 1 fix correctly drives the RIGHT branch for SOUTH/WEST, but
+  `assertOrientationMerges` only asserts entry count, `rows`, total slot count
+  and canonical position. `orderedItems` orders the two halves by position, so
+  for SOUTH/WEST the RIGHT half (lower position) becomes rows 1-3, while the
+  holder route reads the real shared inventory (LEFT half first). The tests
+  cannot tell "both halves combined" from "the same half twice" or a swapped
+  order; a regression in the fallback ordering for right-lower orientations
+  stays green. The geometry fallback test (`:199-225`) pins ordering only for
+  NORTH, where the LEFT half is lower.
+- Suggested fix: put distinct items at the first/last slot of each half in the
+  right-first case and assert they land at `(1,1)/(3,9)` vs `(4,1)/(6,9)`, or
+  add a fallback case where the RIGHT half is at the lower position.
+
+### Non-issues
+- **Round 1 issue 1 resolved.** `:191-197` pass `rightFirst = true` for
+  SOUTH/WEST; `group` processes the RIGHT-typed block first, so
+  `partnerOffset(RIGHT, SOUTH/WEST)` (`impl:110-117`) runs, `isComplementaryHalf`
+  passes and the merged result is asserted (1 entry, 6 rows, 54 slots, canonical
+  position). Reverting the RIGHT table or the right-first path fails these.
+- **Round 1 issue 2 resolved.** `adjacent chests without a double holder stay
+  separate singles` (`:71-85`) uses two adjacent default-`SINGLE` chests and
+  asserts two 3-row entries with their own items; this is exactly the MockBukkit
+  arrangement that must not over-merge.
+- **Round 1 issue 3 resolved.** `a sparse double chest omits empty slots around
+  the half boundary` (`:134-155`) nulls indices 26/27 and asserts `(3,9)`/`(4,1)`
+  absent, `(3,8)`/`(4,2)` present, 52 slots. The fallback test also crosses the
+  index 26/27 boundary.
+- **Round 1 issue 4 resolved by documentation.** `docs/architecture.md:88-91`
+  now states the fallback geometry is hand-checked against vanilla and cannot be
+  verified by MockBukkit. No test reads the implementation table back, which was
+  the round 1 caution.
+- **Correctness issue 1 regression is genuine.** `the geometry fallback combines
+  both halves' captured slots` (`:199-225`) drives the holder-less `geometryChest`
+  route and asserts the concatenated 27+27 items at `(1,1)`,`(3,9)`,`(4,1)`,`(6,9)`.
+  Under the old fallback (current half's empty 27-slot inventory, hardcoded 6
+  rows) `slots.size` would be 0, so it fails.
+- **Correctness issue 2 regression is genuine.** `a single chest is not re-merged
+  by a mismatched adjacent half` (`:87-103`) has the `SINGLE` chest consumed
+  first, then a `LEFT` half pointing at it; `partner in consumed` (`impl:66`)
+  rejects the merge and two 3-row entries are asserted. The old code merged to
+  one entry.
+- **Route separation is still real.** `installDouble`/`fakeChest` leave block
+  data `SINGLE`, so only the holder route can merge; `geometryChest` leaves the
+  holder as the state itself, so only the fallback can merge. Holder mechanics
+  check out: `DoubleChest.getLeftSide()` unwraps `inventory.getLeftSide().getHolder()`,
+  so the proxy's `ChestInventoryMock(left, 27)` resolves to the `FakeChestState`.
+- **No excessive tests.** 16 tests, each tied to an acceptance criterion or a
+  named regression; the canonical/reversed pair and the four left-first
+  orientation tests remain cheap and distinct. No test reads the `partnerOffset`
+  table back.
+- **Conventions held.** Backticked sentence names, JUnit 6, MockBukkit
+  `mock`/`unmock` per test, no unused imports. The trailing commas
+  (`geometryChest`, `:344`) are fine: `.editorconfig` disables both ktlint
+  trailing-comma rules.

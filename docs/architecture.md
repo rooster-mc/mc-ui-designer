@@ -66,7 +66,10 @@ uidesigner/
   only. `DoubleChestGrouper` receives the `Region` alongside the
   `List<ChestContent>`, so it can reach each block via
   `region.world.getBlockAt(position.x, position.y, position.z)`; 060 reads chest
-  names from the same blocks with `ChestNamer.nameOf(block)`.
+  names from the same blocks with `ChestNamer.nameOf(block)`. `items` is
+  expected to be a positive multiple of 9 (the scanner captures 27, a merged
+  double 54); the grouper fails fast otherwise rather than emitting a malformed
+  `rows`.
 - **Double detection (040).** The holder route is primary:
   `(block.state as? Chest)?.inventory?.holder as? DoubleChest`, then
   `DoubleChest.leftSide`/`rightSide` give the two half positions and the merged
@@ -78,7 +81,8 @@ uidesigner/
   `ChestStateMock`'s inventory holder is the state itself). The fallback only
   merges when the partner block is the complementary half (same facing, opposite
   `LEFT`/`RIGHT`) and has not already been emitted; it then concatenates the two
-  halves' captured 27-slot lists (lower position first) rather than trusting
+  halves' captured 27-slot lists (the `RIGHT` half first, then `LEFT`, matching
+  the holder route's shared-inventory order) rather than trusting
   `Chest.inventory`, which is the 27-slot block inventory when the pair is
   unlinked. `rows` is derived from the item list size (`size / 9`, required to be
   a positive multiple of 9) for both routes, so a 27-item list can never be

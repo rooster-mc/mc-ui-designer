@@ -65,7 +65,10 @@ object DoubleChestGrouper {
         val partner = BlockPos(block.x + offset.first, block.y, block.z + offset.second)
         if (partner in consumed || byPosition[partner] == null) return null
         if (!isComplementaryHalf(region, partner, data)) return null
-        return DoubleMatch(listOf(here, partner), orderedItems(here, partner, byPosition))
+        return DoubleMatch(
+            listOf(here, partner),
+            orderedItems(data.type, here, partner, byPosition),
+        )
     }
 
     private fun isComplementaryHalf(region: Region, partner: BlockPos, data: ChestData): Boolean {
@@ -83,10 +86,15 @@ object DoubleChestGrouper {
         }
 
     private fun orderedItems(
+        type: ChestData.Type,
         here: BlockPos,
         partner: BlockPos,
         byPosition: Map<BlockPos, ChestContent>,
-    ): List<ItemStack?> = listOf(here, partner).sorted().flatMap { byPosition.getValue(it).items }
+    ): List<ItemStack?> {
+        val (right, left) =
+            if (type == ChestData.Type.RIGHT) here to partner else partner to here
+        return byPosition.getValue(right).items + byPosition.getValue(left).items
+    }
 
     private fun DoubleChest.halvesIn(
         byPosition: Map<BlockPos, ChestContent>,

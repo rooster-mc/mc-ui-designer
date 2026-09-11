@@ -108,3 +108,113 @@ violating an explicit acceptance criterion.
 - **Docs nit (not filed as an issue).** `docs/architecture.md:77-79` says both
   routes read the shared 54-slot inventory; the fallback only does so when the
   halves are linked. Worth a wording tweak alongside issue 1's fix.
+
+## Round 2
+### Verdict
+Ship with fixes. Both round 1 issues are genuinely fixed (the fallback no longer
+reads a 27-slot inventory as 6 rows, and a partner already emitted cannot be
+re-merged), and the holder route is unchanged. One medium issue remains: the
+fallback's item order is position-sorted, which contradicts the slot order the
+production holder route (and the in-game GUI) produces, so the fallback test
+pins a mapping production never emits.
+
+### Issues
+#### 1. Fallback orders halves by position, holder route orders them RIGHT-first (severity: medium)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/capture/DoubleChestGrouper.kt:85-89`
+  (`orderedItems`), used at `:68`; holder route at `:50`; test
+  `src/test/kotlin/dev/cypdashuhn/uidesigner/capture/DoubleChestGrouperTest.kt:200-225`.
+- Problem: the holder route returns `holder.inventory.contents`, and for a
+  linked double that array is the shared `CompoundContainer`, i.e. the
+  `Chest.Type.RIGHT` half's 27 slots first, then the `LEFT` half's. Verified
+  against `run/versions/26.2/paper-26.2.jar`: `ChestBlock.getBlockType` maps
+  `RIGHT -> DoubleBlockCombiner.BlockType.FIRST` (LEFT -> SECOND), and
+  `DoubleBlockCombiner.combineWithNeigbour` builds `CompoundContainer(first,
+  second)` with `first = isFirst ? current : neighbor`, so `container1` is the
+  RIGHT half regardless of which half's `Chest.getInventory()` is queried
+  (`CraftInventoryDoubleChest` sets `left = container1`; `CraftInventory`'s
+  `getContents`/`getItem` read `container1` first). Note the naming is inverted
+  from intuition: `DoubleChest.getLeftSide()` is
+  `inventory.getLeftSide().getHolder()` = `container1.getOwner()`, i.e. the
+  `Chest.Type.RIGHT` block. The fallback instead does
+  `listOf(here, partner).sorted()`, so it puts whichever half has the lower
+  `x`/`y`/`z` first. For `NORTH`- and `EAST`-facing pairs the LEFT half has the
+  lower coordinate, so the fallback writes the LEFT half into rows 1..3 while
+  production writes the RIGHT half there; `SOUTH`/`WEST` happen to agree. The
+  fallback test asserts the divergent (LEFT-first) mapping, so it validates
+  behaviour the primary route never produces — and the fallback is the only
+  route MockBukkit can exercise.
+- Reproduction: place a `NORTH`-facing double chest with LEFT at `(0,0)` and
+  RIGHT at `(1,0)`. Put gold in RIGHT slot 0 and stone in LEFT slot 0. Linked
+  (production): export has `row 1, slot 1 = minecraft:gold_ingot`. Drive the
+  same two blocks through the geometry fallback (unlinked data, as MockBukkit
+  forces): `orderedItems` sorts `(0,0)` before `(1,0)` and the export has
+  `row 1, slot 1 = minecraft:stone`. Same physical chest, different design.
+- Suggested fix: order by half type, not position: emit the RIGHT half's
+  captured items first, then the LEFT half's. `geometryMatch` already has
+  `data.type` and can pass it down (e.g. `orderedItems(data.type, here,
+  partner, byPosition)` picking `[right, left]`), or derive the order from
+  `isComplementaryHalf`'s partner data. Update
+  `DoubleChestGrouperTest.kt:200-225`'s expected rows accordingly. If
+  position-first is genuinely wanted, the holder route would have to be changed
+  too — but that would reorder what the designer saw in the GUI, so it is the
+  wrong direction.
+
+#### 2. `rowCount` hard-fails the whole group on an unexpected list size (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/capture/DoubleChestGrouper.kt:121-126`,
+  called from `:37`.
+- Problem: `require(items.isNotEmpty() && items.size % 9 == 0)` throws
+  `IllegalArgumentException`, aborting the entire `group`/export for any
+  `ChestContent` whose list is empty or not a multiple of 9. No current
+  production path reaches it (`ChestScanner.kt:22` always captures 27, the
+  holder route always 54, the fallback 27+27), so this is robustness rather
+  than a live bug, but the grouper is a public entry point and a single
+  malformed entry turns a partial-data situation into a hard crash instead of
+  degrading to the single route. No test covers the guard.
+- Suggested fix: make the contract explicit. Either keep fail-fast and add a
+  test plus a doc line, or treat an empty/non-multiple list as the single route
+  (e.g. only derive `rows` from `items.size / 9` when `size % 9 == 0` and fall
+  back to the block inventory size otherwise) so one bad chest cannot kill the
+  whole capture.
+
+### Non-issues
+- **Round 1 issue 1 fixed.** `geometryMatch` now returns
+  `orderedItems(here, partner, byPosition)` (concatenated captured 27-lists,
+  `:68`), not `chest.inventory.contents`, and `uiChest` derives `rows` from the
+  serialized list via `rowCount` (`:36-37`). A 27-item fallback can no longer be
+  stamped as 6 rows. The `geometryChest` tests feed 27-item lists and get a
+  6-row/54-slot merge, so the fix is exercised.
+- **Round 1 issue 2 fixed.** `geometryMatch` rejects `partner in consumed`
+  (`:66`) and requires `isComplementaryHalf` (`:67`, `:71-76`), and `halvesIn`
+  filters `it !in consumed` (`:97`). Traced the round 1 repro (SINGLE at
+  `(0,0)`, `LEFT`/`SOUTH` at `(1,0)`) in both input orders: the SINGLE is
+  emitted once and the LEFT is emitted once; neither claims the other. The
+  `mismatched adjacent half` test (`:88-103`) pins it.
+- **Consumed bookkeeping.** For a merge, `consumed += match.positions` (`:26`)
+  adds both halves, so reversed input and the holder route are idempotent; the
+  loop's `if (content.position in consumed) continue` (`:23`) skips the second
+  half. Traced `[A,B]`, `[B,A]`, and `[A,C,B]` with A/B a pair: one entry.
+- **Holder route unchanged.** `match` still reads
+  `chest.inventory.holder as? DoubleChest` and, when `halvesIn` returns two
+  in-selection, unconsumed positions, returns the shared 54-slot
+  `holder.inventory.contents` (`:47-50`). The fallback is only reached when the
+  holder is absent or a half is out of selection/already consumed, and in the
+  latter case the geometry route re-checks `consumed`, so the shared-inventory
+  read is not silently replaced for a linked, fully selected pair.
+- **One-half selection.** `halvesIn`'s `takeIf { it.size == 2 }` (`:98`) falls
+  through, then `byPosition[partner] == null` (`:66`) returns null, so the single
+  route uses the selected half's own captured 27 items. Matches the documented
+  decision (`docs/tasks/040-double-chest-grouping.md:40-44`,
+  `docs/design.md`).
+- **`isComplementaryHalf` reading block data through the region.** The partner
+  is already in `byPosition` (scanned loaded), the read is a main-thread
+  `getBlockAt().blockData`, and a non-`ChestData` partner degrades to no merge
+  (`:73-74`). No correctness or threading problem for the current call path.
+- **A fallback merge cannot re-claim an emitted position.** `here` is never
+  consumed (loop skip) and `partner in consumed` is checked before building the
+  match (`:66`), so no position is emitted twice across iterations.
+- **Row/slot math, air slots, names.** `index / 9 + 1` and `index % 9 + 1`
+  (`:133`, `:140`) are correct for 27/54; `rows` never emits an empty row;
+  `plainDisplayName` (`:148-152`) drops blank custom names and no material name
+  leaks. `name = null` on the chest is correct for 040 (naming is 060).
+- **Canonical position.** `match.positions.min()` matches
+  `docs/data-format.md:41-43`; `JsonExporter` remains the ordering authority.

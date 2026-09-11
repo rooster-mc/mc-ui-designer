@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.mockbukkit.mockbukkit.MockBukkit
 import org.mockbukkit.mockbukkit.ServerMock
 import org.mockbukkit.mockbukkit.block.data.ChestDataMock
@@ -82,6 +83,24 @@ class DoubleChestGrouperTest {
         assertEquals(listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)), result.map { it.position })
         assertEquals(listOf(3, 3), result.map { it.rows })
         assertEquals(listOf("minecraft:stone", "minecraft:dirt"), result.map { it.firstItem() })
+    }
+
+    @Test
+    fun `a malformed chest inventory size fails fast`() {
+        plainChest(0, 0)
+
+        assertThrows<IllegalArgumentException> {
+            DoubleChestGrouper.group(
+                region(0, 0, 0, 0),
+                listOf(ChestContent(BlockPos(0, 0, 0), List(5) { null })),
+            )
+        }
+        assertThrows<IllegalArgumentException> {
+            DoubleChestGrouper.group(
+                region(0, 0, 0, 0),
+                listOf(ChestContent(BlockPos(0, 0, 0), emptyList())),
+            )
+        }
     }
 
     @Test
@@ -218,10 +237,10 @@ class DoubleChestGrouperTest {
         assertEquals(6, ui.rows)
         val slots = ui.content.slotItems()
         assertEquals(4, slots.size)
-        assertEquals("minecraft:stone", slots[1 to 1])
-        assertEquals("minecraft:diamond", slots[3 to 9])
-        assertEquals("minecraft:gold_ingot", slots[4 to 1])
-        assertEquals("minecraft:emerald", slots[6 to 9])
+        assertEquals("minecraft:gold_ingot", slots[1 to 1])
+        assertEquals("minecraft:emerald", slots[3 to 9])
+        assertEquals("minecraft:stone", slots[4 to 1])
+        assertEquals("minecraft:diamond", slots[6 to 9])
     }
 
     @Test
@@ -292,11 +311,16 @@ class DoubleChestGrouperTest {
         dz: Int,
         rightFirst: Boolean = false,
     ) {
-        val items = filledItems(54)
         val left = geometryChest(0, 0, facing, ChestData.Type.LEFT)
         val right = geometryChest(dx, dz, facing, ChestData.Type.RIGHT)
-        val leftContent = content(left, items.take(27))
-        val rightContent = content(right, items.drop(27))
+        val leftItems = filledItems(27)
+        leftItems[0] = ItemStack(Material.STONE)
+        leftItems[26] = ItemStack(Material.DIAMOND)
+        val rightItems = filledItems(27)
+        rightItems[0] = ItemStack(Material.GOLD_INGOT)
+        rightItems[26] = ItemStack(Material.EMERALD)
+        val leftContent = content(left, leftItems.toList())
+        val rightContent = content(right, rightItems.toList())
         val contents =
             if (rightFirst) listOf(rightContent, leftContent) else listOf(leftContent, rightContent)
 
@@ -311,6 +335,12 @@ class DoubleChestGrouperTest {
         assertEquals(6, ui.rows)
         assertEquals(54, ui.content.sumOf { it.slots.size })
         assertEquals(BlockPos(minOf(0, dx), 0, minOf(0, dz)), ui.position)
+
+        val slots = ui.content.slotItems()
+        assertEquals("minecraft:gold_ingot", slots[1 to 1])
+        assertEquals("minecraft:emerald", slots[3 to 9])
+        assertEquals("minecraft:stone", slots[4 to 1])
+        assertEquals("minecraft:diamond", slots[6 to 9])
     }
 
     private fun installDouble(
