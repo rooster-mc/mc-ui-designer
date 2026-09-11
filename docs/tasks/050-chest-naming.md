@@ -1,6 +1,6 @@
 ---
 name: "/chest-edit naming"
-status: todo
+status: done
 parent: MVP
 depends-on: [000]
 reviewers: [tester, correctness, ux]
