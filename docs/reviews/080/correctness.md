@@ -80,3 +80,58 @@ interpreted in the player's world instead of being reported as "no selection".
 - **`RegionTest` deletion loses no coverage that matters here.** The inverted/
   mixed-corner cases now live in `rooster-region`'s own `RegionTest`; this repo
   has no remaining consumer of raw `edge1`/`edge2` ordering.
+
+## Round 2
+### Verdict
+Ship. Round-1 finding 1 is resolved correctly: `FaweSelectionSource` now rejects
+a selection whose world is not the player's current world before converting it,
+so the stale cross-world selection is reported as no selection again. The
+`RegionExt.blockAt` extension also restores the `BlockPos`-keyed lookup seam
+without changing behaviour. I found no new correctness issues.
+
+### Findings
+#### No new findings.
+
+### Non-findings
+- **Round-1 finding 1 is fixed and the guard is correct.**
+  `src/main/kotlin/dev/cypdashuhn/uidesigner/capture/FaweSelectionSource.kt:10-14`
+  reads the selection once, returns `null` when
+  `selection.world?.name != player.world.name` (line 13), and only then converts
+  with `toRegion(player.world)`.
+  - World comparison: `selection.world` is the region's WorldEdit world; for a
+    `BukkitWorld`, `getName()` returns the Bukkit world's name (verified via
+    `javap` on FAWE-Bukkit 2.15.3: `BukkitWorld.getName()` calls
+    `getWorldChecked().getName()`, and `BukkitWorld.equals` already falls back to
+    name equality for a generic `World`). For the wrapper case, `WorldWrapper.getName()`
+    delegates to its parent's name (verified via `javap`), so the wrapper cannot
+    produce a false mismatch. Names are unique per server, so this matches the
+    old `isSelectionDefined(playerWorld)` outcome.
+  - Null handling: `selection.world?.name` is null-safe; a null world yields
+    `null != player.world.name`, so the function returns `null` rather than
+    converting. `player.world` is never null.
+  - Normal path: a selection made in the player's current world has matching
+    names, so the guard passes and `toRegion(player.world)` produces exactly the
+    same `Region` as the round-1 one-liner; there is no behaviour change when the
+    selection is valid.
+  - Cross-world path: selection in world A, player in world B -> names differ ->
+    `null`, which is the pre-swap `NoSelection` behaviour and stops the
+    coordinate reinterpretation I reported in round 1.
+- **`RegionExt.blockAt` is a faithful restore of the removed helper.**
+  `capture/RegionExt.kt:7-8` is `world.getBlockAt(position.x, position.y, position.z)`,
+  and `DoubleChestGrouper.kt:46,77` / `UiDesignerCommand.kt:141` call it; the
+  scanner's int-triple loop (`ChestScanner.kt:17`) stays inline as before. No
+  `BlockPos`-keyed site lost the bounds/accessor semantics, and `internal`
+  visibility covers both `capture/` and `commands/` (same Gradle module).
+- **The joml `doLast` check is sound.** `build.gradle.kts:134-149` opens the
+  finished `archiveFile` and asserts no entry starts with `org/joml/`; it is part
+  of `shadowJar`, which `tasks.build` depends on, so `just build` runs it. I
+  concur with tester round-2 non-finding that this closes round-1 finding 1.
+- **Concur with tester round-2 finding 1.** The new guard is not reachable under
+  MockBukkit (FAWE is `compileOnly`) and `docs/manual-test.md` has no 080 row, so
+  the fix's regression protection is the manual gate; that is a real tracked gap
+  and a tester/process matter, not a code-correctness defect. The code path
+  itself is correct as analysed above.
+- **The `settings.gradle.kts` sibling `check` changes no runtime behaviour.**
+  It fails settings evaluation with a named path when `../rooster-region` is
+  absent; that is build topology (architecture finding 1), and the runtime
+  contract is unaffected.

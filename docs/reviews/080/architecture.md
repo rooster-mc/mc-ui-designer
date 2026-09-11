@@ -106,3 +106,58 @@ drops the toolchain rationale it reverses.
 - **The deleted `RegionTest` and the mechanical test re-points leave no dangling
   references.** The library now owns `Region` semantics, which is the point of
   the ticket; nothing in this repo still expects a local `Region` type.
+
+## Round 2
+### Verdict
+Ship. All four round-1 findings are resolved in `6dc2450`: the composite build
+now fails fast with a named path when the sibling is missing and `design.md`
+records the prerequisite; `architecture.md` describes the composite topology;
+`RegionExt.blockAt` restores the `BlockPos` lookup seam and the docs follow it;
+and the `design.md` decision records the Paper/JDK delta and the joml exclusion.
+I found no new architecture or doc-staleness issues.
+
+### Findings
+#### No new findings.
+
+### Non-findings
+- **Round-1 finding 1 (undocumented sibling checkout) is resolved.**
+  `settings.gradle.kts:7-10` checks `rootDir.resolve("../rooster-region")` and
+  fails settings evaluation with the canonical path in the message, and
+  `docs/design.md:41-42` states the prerequisite ("requires `../rooster-region`
+  checked out beside this repository"). The path still resolves correctly under
+  the workflow's `../mc-ui-designer--<id>` worktree layout, so isolation is not
+  affected.
+- **Round-1 finding 2 ("Single Gradle module") is resolved.**
+  `docs/architecture.md:3-5` now says "One Gradle module in this repository
+  (`UiDesigner`); the region and WorldEdit-selection types come from the
+  `rooster-region` composite build (`:core`, `:worldedit`)", which matches the
+  seam bullet at `:44-47`.
+- **Round-1 finding 3 (inlined `getBlockAt` drift) is resolved.**
+  `capture/RegionExt.kt:7-8` adds `internal fun Region.blockAt(position: BlockPos)`,
+  and the three `BlockPos` sites use it (`DoubleChestGrouper.kt:46,77`,
+  `UiDesignerCommand.kt:141`); the scanner's int-triple loop stays inline as
+  intended. The docs keep pace: the package tree lists `RegionExt.kt`
+  (`docs/architecture.md:18`), the seam bullet explains the extension
+  (`:59-62`), the grouper contract names it (`:85`), and the data-flow diagram
+  shows `region.blockAt(position)` (`:159`). No remaining `region.world.getBlockAt`
+  reference for a `BlockPos` lookup in source or docs.
+- **Round-1 finding 4 (toolchain/joml rationale) is resolved.**
+  `docs/design.md:42-45` records that the library targets Paper 1.21.4 / Java 21
+  while this plugin targets 26.2 / Java 25, that the exposed
+  `Region`/`Location`/`World` surface is accepted as stable, and that its `api`
+  joml is excluded because Paper supplies it.
+- **Concur with tester round-2 finding 1.** The new cross-world guard
+  (`FaweSelectionSource.kt:10-14`) is not reachable under MockBukkit (FAWE is
+  `compileOnly`) and `docs/manual-test.md` still has no 080 row; that is a
+  tester/process gap for the guard's regression protection, and I add nothing to
+  it.
+- **The cross-world guard lives on the right side of the library boundary.**
+  It sits in `FaweSelectionSource` — the one file the ticket reserves for adapter
+  code — rather than leaking WorldEdit world logic into `capture/` or `commands/`.
+  The library's `worldEditSelection()` returning the session's selection world is
+  a general-purpose behaviour, so no `rooster-region` change or follow-up ticket
+  is required for this fix to stand; I do not consider the guard a workaround
+  awaiting removal.
+- **Concur with correctness round-2.** The guard's world-name comparison and the
+  `RegionExt.blockAt` restore are behaviour-preserving; no architecture change
+  follows from those analyses.

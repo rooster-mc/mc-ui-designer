@@ -68,3 +68,63 @@ which is not recorded in `docs/manual-test.md`.
   mild duplication of a four-line `region(...)` helper across three suites is
   acceptable — extracting a shared fixture is a readability preference, not a
   test-quality problem.
+
+## Round 2
+### Verdict
+Ship with one fix. The round-1 joml finding is resolved by a real build-time
+check (`build.gradle.kts:134-149`), and the mechanical test changes are
+unchanged and still correct. The only remaining test-quality gap is the new
+cross-world stale-selection guard in `FaweSelectionSource`: the harness cannot
+exercise it (FAWE is `compileOnly`) and it is not recorded in
+`docs/manual-test.md`, so the fix for correctness finding 1 is currently
+untracked.
+
+### Findings
+
+#### 1. The new cross-world selection guard has no test and no manual-test entry
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/capture/FaweSelectionSource.kt:10-14`;
+  `docs/manual-test.md` (no 080 row).
+- Problem: this commit adds a production branch the suite cannot reach:
+  `selectionOf` now returns `null` when `selection.world?.name` differs from the
+  player's world (`FaweSelectionSource.kt:13`). `FaweSelectionSource` calls the
+  library's `worldEditSelection()`, which needs a live WorldEdit session, and
+  FAWE is `compileOnly` and absent from the test classpath
+  (`build.gradle.kts:47-57`); the `SelectionSource` fake used by
+  `ChestScannerTest`/`UiDesignerCommandTest` bypasses it entirely, so no test
+  exercises the guard. Correctness's round-1 fix direction included tracking this
+  path in `docs/manual-test.md`, but the commit did not touch that file (checked
+  `git show 6dc2450 --name-only`), and none of `MT-001`–`MT-004` switches worlds
+  mid-session. The guard therefore has no regression protection and no recorded
+  manual check — if it is deleted or inverted, the suite stays green. (I am not
+  re-reporting correctness finding 1, which is fixed; this is only the missing
+  verification for the fix.)
+- Suggested fix: add a `docs/manual-test.md` row owned by 080 (e.g. `MT-005`):
+  "Select a region in world A, teleport to world B without re-selecting, run
+  `/uidesigner save`, and confirm the plugin reports no selection (does not scan
+  world B at A's coordinates)." A new row is better than folding it into `MT-001`,
+  which never changes worlds. Do not attempt a MockBukkit test here; the
+  WorldEdit session is exactly what this harness cannot provide.
+
+### Non-findings
+- **Round-1 finding 1 is resolved.** `build.gradle.kts:134-149` adds a `doLast`
+  on `ShadowJar` that opens `archiveFile` and `check(...)`s that no entry starts
+  with `org/joml/`, which is the automated form I asked for. It runs as part of
+  `just build` (`tasks.build` depends on `shadowJar`, `build.gradle.kts:152-154`)
+  and the failure message names the count and sample entries. No manual row is
+  needed for joml.
+- **The test suite is unchanged and still the right minimum.** `6dc2450` did not
+  add or alter any test beyond the round-1 mechanical `region(...)` re-points
+  (`ChestScannerTest.kt:165-169`, `DoubleChestGrouperTest.kt:423-427`,
+  `UiDesignerCommandTest.kt:585-589`); no assertions moved, so "existing
+  behaviour is unchanged" remains pinned by the same cases.
+- **`RegionExt.blockAt` needs no dedicated test.** The new extension
+  (`RegionExt.kt:7-8`) is a one-line `world.getBlockAt(...)` delegate; a direct
+  test would only re-assert MockBukkit. It is exercised at all three call sites
+  through the existing grouper and command suites, the same conclusion 060's
+  tester reached for the identical helper.
+- **`settings.gradle.kts`'s sibling-check is build config, not a test gap.** It
+  fails fast with a named path before settings evaluation; there is nothing for
+  the JUnit harness to assert, and `just build` green is the right gate.
+- **No new brittleness or excess.** The added build check inspects the artifact
+  by entry prefix (not a hash or a fixed entry list), and no test snapshots the
+  library type or the shaded jar's contents.
