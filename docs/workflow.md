@@ -37,6 +37,20 @@ Every reviewer writes a report; the orchestrator hands reports back to
 Two rounds total per ticket. Omit stages that do not apply, but keep the order
 of those that remain.
 
+## Verification ownership
+
+- The **implementor** is the only agent that runs the build, the test suite, and
+  the formatter/lint. It must leave the tree green before a ticket goes to
+  review, and report the exact commands and results.
+- Reviewers do **not** run long or slow tools (Gradle, `just test`, the dev
+  server, ktlint, ...). They assume a green tree: if tests were not green, the
+  ticket would not have reached review. Reviewing is reading and reasoning, not
+  re-executing.
+- If a reviewer suspects a failure, it states the suspicion and the scenario in
+  its report; the orchestrator sends it to the implementor to reproduce. This
+  keeps slow verification in one place instead of repeating it per stage.
+- Quick read-only inspection (reading files, `git diff`, `fcp query`) is fine.
+
 ## Commits
 
 - Conventional commits: `type(domain): description`, imperative, lowercase,

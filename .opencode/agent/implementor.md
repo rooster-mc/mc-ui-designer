@@ -28,8 +28,11 @@ chest designs to JSON. You implement exactly one ticket at a time.
   `SelectionSource` isolation). Bukkit types must not leak into pure packages.
 - Write tests where the ticket says they make sense. Prefer a few meaningful
   tests over many shallow ones.
-- Run the build and tests before finishing (`just build`, `just test`, or the
-  Gradle equivalents). Fix what you broke.
+- You own verification: run the build, the full test suite, and the formatter
+  before finishing (`just build`, `just test`, `just format`, or the Gradle
+  equivalents). Fix everything that is red.
+- Report the exact commands you ran and their result. A ticket is only ready
+  for review once the suite is green; reviewers are not expected to re-run it.
 - Do not commit; the orchestrator administers git.
 
 ## When addressing review reports

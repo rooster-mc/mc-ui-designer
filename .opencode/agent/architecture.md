@@ -26,6 +26,7 @@ extendability, not style.
 - Read the ticket, the diff, and the relevant docs.
 - Walk through the "next feature" hypothetically: how many places must change,
   and does anything break?
+- Do not run the build or the suite; the implementor hands over a green tree.
 - Reference concrete files and lines.
 
 ## Output

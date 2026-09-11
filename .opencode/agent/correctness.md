@@ -24,7 +24,9 @@ not work as intended.
 
 ## How
 - Read the ticket, the diff, and the surrounding code.
-- Trace concrete scenarios by hand. Run tests or the dev server if useful.
+- Trace concrete scenarios by hand rather than running the suite; the
+  implementor hands over a green tree, so a failing test is a process problem,
+  not a finding. Flag suspicion, do not re-run long checks.
 - Reference concrete files and lines.
 
 ## Output

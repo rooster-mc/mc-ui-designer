@@ -23,7 +23,8 @@ is good to actually use in-game. Skip tickets with no player-facing surface.
 
 ## How
 - Read the ticket, the diff, and `docs/design.md`.
-- Mentally (or actually) walk the flow on the dev server.
+- Mentally walk the flow from the code. Do not boot the dev server or run the
+  suite; the implementor hands over a green tree.
 - Reference concrete files and lines, and quote the exact message text.
 
 ## Output

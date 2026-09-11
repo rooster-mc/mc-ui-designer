@@ -30,6 +30,7 @@ JUnit 5 + MockBukkit. Full list and rationale in `docs/design.md`.
 just build      # shaded plugin jar
 just run        # dev server on localhost:25000 with FAWE
 just test       # JUnit suite
+just format     # ktlint
 ```
 
 (If `justfile` targets do not exist yet, they are created by ticket 000.)
@@ -47,6 +48,9 @@ writes tickets, delegates to subagents, and administers git.
 - Per ticket: implement, then run the ticket's `reviewers` in order, hand the
   reports back to `implementor`, commit, and repeat for a second round.
 - Omit reviewers that are irrelevant; keep the order of those that remain.
+- Only `implementor` runs slow verification (build, `just test`, `just
+  format`, the dev server) and must leave the tree green. Reviewers read and
+  reason; they do not re-run it.
 
 ## Git
 

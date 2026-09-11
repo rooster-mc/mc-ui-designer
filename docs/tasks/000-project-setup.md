@@ -24,7 +24,7 @@ the (empty) UiDesigner plugin loaded, plus a working build/test/run loop.
   case works out of the box.
 - `config.yml` resource with `output-file` defaulted from the Gradle property
   `uiDesigner.defaultOutput` (resource filtering).
-- `justfile`: `build`, `run`, `test`.
+- `justfile`: `build`, `run`, `test`, `format` (ktlint).
 - Test source set with JUnit 5 + MockBukkit and one smoke test.
 - `.editorconfig` and `.gitignore` (already present at repo root; extend if
   needed).

@@ -27,7 +27,9 @@ where they hinder development. Call out both missing *and* excessive tests.
 
 ## How
 - Read the ticket, the diff, and the test sources.
-- Run the suite if useful (`just test`).
+- Do not run the build or the test suite. The implementor runs it and hands
+  over a green tree; a red suite is treated as a blocker that should have
+  stopped the ticket before review, not as something for you to discover.
 - Reference concrete files and lines.
 
 ## Output

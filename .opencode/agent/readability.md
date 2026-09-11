@@ -26,7 +26,8 @@ gratuitous rewrites; flag only what genuinely slows a reader down.
 
 ## How
 - Read the diff and the full files it touches.
-- Run the formatter/lint if configured.
+- Judge formatting from the code; the implementor runs the formatter/lint and
+  hands over a clean tree. Do not run long tools yourself.
 - Reference concrete files and lines.
 
 ## Output
