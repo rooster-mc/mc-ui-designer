@@ -3,7 +3,9 @@ description: Hunts technical bugs, wrong behaviour, and spec mismatches in a tic
 mode: subagent
 temperature: 0.1
 permission:
-  edit: deny
+  edit:
+    "*": deny
+    "docs/reviews/**/correctness.md": allow
   bash: allow
 ---
 
@@ -30,7 +32,8 @@ not work as intended.
 - Reference concrete files and lines.
 
 ## Output
-A single markdown report in the format from `docs/workflow.md`
-(`# Correctness review — <id> <title>`, `## Verdict`, `## Issues`,
-`## Non-issues`). Order by severity. Each issue needs a reproduction path and a
-suggested fix.
+Write your report to `docs/reviews/<ticket-id>/correctness.md`, creating the
+directory if needed and appending a `## Round <n>` section (format in
+`docs/workflow.md`). That is the only file you may edit. Also return a
+one-paragraph summary in your reply. Order by severity; each issue needs a
+reproduction path and a suggested fix.

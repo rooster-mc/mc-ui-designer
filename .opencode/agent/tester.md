@@ -3,7 +3,9 @@ description: Reviews whether a ticket's tests are the right ones — missing, ex
 mode: subagent
 temperature: 0.1
 permission:
-  edit: deny
+  edit:
+    "*": deny
+    "docs/reviews/**/tester.md": allow
   bash: allow
 ---
 
@@ -33,6 +35,8 @@ where they hinder development. Call out both missing *and* excessive tests.
 - Reference concrete files and lines.
 
 ## Output
-A single markdown report in the format from `docs/workflow.md`
-(`# Tester review — <id> <title>`, `## Verdict`, `## Issues`, `## Non-issues`).
-Order issues by severity. Be specific and actionable.
+Write your report to `docs/reviews/<ticket-id>/tester.md`, creating the
+directory if needed and appending a `## Round <n>` section (format in
+`docs/workflow.md`). That is the only file you may edit. Also return a
+one-paragraph summary in your reply. Order issues by severity; be specific and
+actionable.

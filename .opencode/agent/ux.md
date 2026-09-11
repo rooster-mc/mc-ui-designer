@@ -3,7 +3,9 @@ description: Reviews the player-facing loop — actions, feedback, and presentat
 mode: subagent
 temperature: 0.1
 permission:
-  edit: deny
+  edit:
+    "*": deny
+    "docs/reviews/**/ux.md": allow
   bash: allow
 ---
 
@@ -28,6 +30,7 @@ is good to actually use in-game. Skip tickets with no player-facing surface.
 - Reference concrete files and lines, and quote the exact message text.
 
 ## Output
-A single markdown report in the format from `docs/workflow.md`
-(`# UX review — <id> <title>`, `## Verdict`, `## Issues`, `## Non-issues`).
-Focus on the experience, not code style.
+Write your report to `docs/reviews/<ticket-id>/ux.md`, creating the directory
+if needed and appending a `## Round <n>` section (format in
+`docs/workflow.md`). That is the only file you may edit. Also return a
+one-paragraph summary in your reply. Focus on the experience, not code style.

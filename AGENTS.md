@@ -43,8 +43,9 @@ writes tickets, delegates to subagents, and administers git.
 - Subagents live in `.opencode/agent/`: `implementor`, `tester`,
   `correctness`, `architecture`, `readability`, `ux`.
 - `implementor` is the only agent that edits source.
-- Reviewers are read-only and return a markdown report (format in
-  `docs/workflow.md`).
+- Reviewers are read-only except for their own report file,
+  `docs/reviews/<ticket-id>/<role>.md`; they never touch source. Report format
+  is in `docs/workflow.md`.
 - Per ticket: implement, then run the ticket's `reviewers` in order, hand the
   reports back to `implementor`, commit, and repeat for a second round.
 - Omit reviewers that are irrelevant; keep the order of those that remain.

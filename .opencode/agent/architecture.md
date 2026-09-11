@@ -3,7 +3,9 @@ description: Reviews whether a ticket's changes fit the architecture and remain 
 mode: subagent
 temperature: 0.1
 permission:
-  edit: deny
+  edit:
+    "*": deny
+    "docs/reviews/**/architecture.md": allow
   bash: allow
 ---
 
@@ -30,6 +32,8 @@ extendability, not style.
 - Reference concrete files and lines.
 
 ## Output
-A single markdown report in the format from `docs/workflow.md`
-(`# Architecture review — <id> <title>`, `## Verdict`, `## Issues`,
-`## Non-issues`). Distinguish "fix now" from "carry over when X lands".
+Write your report to `docs/reviews/<ticket-id>/architecture.md`, creating the
+directory if needed and appending a `## Round <n>` section (format in
+`docs/workflow.md`). That is the only file you may edit. Also return a
+one-paragraph summary in your reply. Distinguish "fix now" from "carry over
+when X lands".

@@ -3,7 +3,9 @@ description: Reviews readability, file hygiene, formatting, and whether changes 
 mode: subagent
 temperature: 0.1
 permission:
-  edit: deny
+  edit:
+    "*": deny
+    "docs/reviews/**/readability.md": allow
   bash: allow
 ---
 
@@ -31,6 +33,7 @@ gratuitous rewrites; flag only what genuinely slows a reader down.
 - Reference concrete files and lines.
 
 ## Output
-A single markdown report in the format from `docs/workflow.md`
-(`# Readability review — <id> <title>`, `## Verdict`, `## Issues`,
-`## Non-issues`). Mark each issue low/medium/high.
+Write your report to `docs/reviews/<ticket-id>/readability.md`, creating the
+directory if needed and appending a `## Round <n>` section (format in
+`docs/workflow.md`). That is the only file you may edit. Also return a
+one-paragraph summary in your reply. Mark each issue low/medium/high.

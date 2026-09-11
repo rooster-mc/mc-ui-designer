@@ -12,15 +12,16 @@ Subagents (defined in `.opencode/agent/`):
 | Agent | Job |
 |---|---|
 | `implementor` | Implements the ticket and its tests. The only agent that edits source. |
-| `tester` | Reviews test coverage: missing, excessive, brittle. Can add/remove tests. |
+| `tester` | Reviews test coverage: missing, excessive, brittle. |
 | `correctness` | Hunts technical bugs, wrong behaviour, spec mismatches. |
 | `architecture` | Checks fit with existing structure, extendability, over-generalisation. |
 | `readability` | Checks clarity, file hygiene, formatting, followability. |
 | `ux` | Checks the player-facing loop: actions, feedback, presentation. |
 
 Omit a reviewer when it is genuinely irrelevant (e.g. `ux` for pure backend).
-Every reviewer writes a report; the orchestrator hands reports back to
-`implementor`.
+Every reviewer owns exactly one report file, bound to its role (see
+[Review reports](#review-reports)); the orchestrator hands those reports back
+to `implementor`.
 
 ## Per-ticket pipeline
 
@@ -80,28 +81,42 @@ Body: goal, scope, acceptance criteria, out of scope, notes.
 - `reviewers` lists which pipeline stages apply, in pipeline order.
 - Status is owned by the orchestrator; update it in place.
 
-## Reviewer report format
+## Review reports
 
-Each reviewer returns a single markdown report:
+Each reviewer writes to exactly one file, bound to its role:
+
+```
+docs/reviews/<ticket-id>/<role>.md
+```
+
+- The reviewer creates the ticket directory if needed and appends a
+  `## Round <n>` section; it never touches any other file.
+- This is the only write a reviewer may perform. Source stays untouched; the
+  orchestrator commits the report alongside the ticket's work.
+- The orchestrator tells each reviewer the ticket id and round number.
+
+Report body per round:
 
 ```markdown
-# <Stage> review — <ticket id> (<short title>)
+# <Role> review — <ticket id> (<short title>)
 
-## Verdict
+## Round 1
+### Verdict
 One or two sentences: ship / ship with fixes / needs rework.
 
-## Issues
-### 1. <title> (severity: low|medium|high)
+### Issues
+#### 1. <title> (severity: low|medium|high)
 - Location: path:line
 - Problem: what is wrong and why it matters
 - Suggested fix: concrete direction
 
-## Non-issues
+### Non-issues
 Things deliberately checked and found fine (keeps the implementor from
 re-litigating them).
 ```
 
-Reports are committed under `docs/reviews/<ticket-id>-<round>-<stage>.md`.
+The reviewer also returns a one-paragraph summary in its reply so the
+orchestrator can hand feedback to `implementor` without re-reading files.
 
 ## Definition of done for a ticket
 
