@@ -118,3 +118,106 @@ settled now.
   container/reader/format abstraction was added for barrels, shulkers or import.
   `Region` wraps `World` rather than inventing a world handle. This is
   appropriately small for the MVP.
+
+## Round 2
+
+### Verdict
+
+Ship with fixes. The round-1 medium issue is *substantively* resolved: the
+grouper input contract is now written down (`architecture.md:60-64`) and the
+`Region`-reaches-blocks route is the one round 1 explicitly accepted, so 040 no
+longer has to rework 030's output type. The duplicate-predicate carry-over
+(round 1 §3) is documented (`architecture.md:65-67`), and the MockBukkit caveat
+checks out against `ChestStateMock.getBlockInventory()` (verified in the 4.116.1
+sources: it returns `getInventory()`). Two things are left: `ChestCapture` — the
+newly declared "production entry point" — throws away the very `Region` the
+grouper now needs, and one reworded Seams sentence is contradicted by the same
+fix's grouper contract.
+
+### Issues
+
+#### 1. `ChestCapture` discards the `Region` that 060's grouper step needs (severity: medium) — fix now
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/capture/ChestCapture.kt:6-7`,
+  `docs/architecture.md:36-38`, `docs/architecture.md:79-84`
+- Problem: Round 1 settled the grouper contract as "`DoubleChestGrouper` receives
+  the `Region` alongside the `List<ChestContent>`" (`architecture.md:60-64`), but
+  `ChestCapture.capture` returns only `List<ChestContent>?` and has already
+  consumed the `Region` internally. 060 therefore has two bad options: call
+  `source.selectionOf(player)` a second time just to recover the region (two
+  session lookups, two chances to disagree), or bypass `ChestCapture` entirely
+  and compose `selectionOf` + `ChestScanner.scan` itself — in which case the
+  thing the doc calls "the production entry point that glues the two"
+  (`architecture.md:36-38`) is production-dead and exists only for
+  `ChestScannerTest` (`ChestScannerTest.kt:43,53,147`). The data-flow diagram
+  makes the gap visible: the `Region?` at `architecture.md:78` flows into
+  `ChestCapture.capture` (`:79`) but the arrow into `DoubleChestGrouper` (`:82`)
+  carries only `List<ChestContent>?`, so the region the grouper signature names
+  is never shown reaching it.
+- Suggested fix: pick one and make the doc/diagram match. Either (a) drop
+  `ChestCapture` and let 060 do `val region = source.selectionOf(player) ?: …;
+  val contents = ChestScanner.scan(region); DoubleChestGrouper(region, contents)`
+  (the null/empty distinction is then 060's, which is where the user-facing error
+  lives anyway), or (b) keep it but return both, e.g.
+  `data class Capture(val region: Region, val contents: List<ChestContent>)` with
+  `capture(source, player): Capture?`, so 060 gets the region for the grouper in
+  one selection read. In both cases redraw `architecture.md:75-88` so `Region`
+  visibly feeds `DoubleChestGrouper`, and update the 060 pipeline in
+  `docs/tasks/060-export-command.md:15`.
+
+#### 2. `architecture.md` still asserts grouping is free of Bukkit block/inventory access (severity: low) — fix now
+- Location: `docs/architecture.md:49-51` vs `docs/architecture.md:60-64`
+- Problem: The reworded Seams sentence says `ChestScanner` keeps "Bukkit
+  block/inventory access out of grouping", but the grouper contract added in the
+  same fix says `DoubleChestGrouper` "can reach each block via
+  `region.world.getBlockAt(position)`" and detect the `DoubleChest` holder — that
+  *is* Bukkit block/inventory access inside grouping. The two bullets cannot both
+  be true. Round 1's point was that grouping cannot be Bukkit-free while
+  `ChestContent.items` is `List<ItemStack?>`; choosing the `Region`-in-grouper
+  route makes grouping more Bukkit-coupled, not less. The companion claim at
+  `architecture.md:34-36` that "scanning and grouping are testable with fakes" is
+  likewise now loose: grouping needs a real/`WorldMock`-backed `Region`, not a
+  fake.
+- Suggested fix: state the seam honestly — `ChestScanner` is the only place that
+  *enumerates* blocks and reads inventories, grouping may do targeted block
+  lookups through the `Region` (Bukkit-coupled by design, testable with
+  MockBukkit), and only `export` is fully Bukkit-free. Drop the "fakes" wording
+  for grouping or scope it to `SelectionSource`/`ChestScanner`.
+
+#### 3. 040/060 tickets not updated to the new grouper contract (severity: low) — fix now
+- Location: `docs/tasks/040-double-chest-grouping.md:14`,
+  `docs/tasks/060-export-command.md:15`
+- Problem: 040's scope still reads "`DoubleChestGrouper`: given `List<ChestContent>`
+  (one entry per chest block)", with no `Region`, and 060's pipeline still reads
+  "`SelectionSource` → `ChestScanner` → `DoubleChestGrouper` → `JsonExporter`",
+  with no `ChestCapture`/`Region`. Architecture.md is now the authority for a
+  different signature than the ticket that implements it. 040 has no architecture
+  reviewer, so the ticket text is the only thing its implementor sees; leaving it
+  stale invites the exact rework 030 is meant to prevent.
+- Suggested fix: update 040's Scope/Notes to name the `Region` parameter and the
+  `region.world.getBlockAt(position)` route; update 060's pipeline line once issue
+  1's `ChestCapture` shape is decided. Docs should move in the same commit that
+  invalidates them.
+
+### Non-issues
+
+- **The grouper contract itself is settled and adequate.** `Region` + contents is
+  the option round 1 named as acceptable, it gives 040 what its preferred
+  `Chest.getInventory().holder as? DoubleChest` route needs, and 060 can read
+  names with `ChestNamer.nameOf(block)`. No further contract change is needed.
+- **`ChestCapture` in `capture/` and as a stateless `object` is the right
+  placement and kind.** The problem is its return shape (issue 1), not its
+  location; a value-returning glue belongs in `capture/` beside the pieces it
+  composes.
+- **The `Region` cuboid-only note is accurate** (`architecture.md:39-42`) and
+  matches `docs/design.md:57-59`; it is a deliberate MVP limitation, not drift.
+- **The MockBukkit limitation note is accurate.** Verified `ChestStateMock`
+  (MockBukkit 4.116.1) `getBlockInventory()` returns `getInventory()`, so
+  `ChestScannerTest`'s "adjacent chests stay separate" test cannot exercise the
+  real `blockInventory` vs shared-`inventory` distinction — exactly as documented
+  (`architecture.md:56-59`).
+- **The duplicate chest predicate is correctly recorded as a carry-over**
+  (`architecture.md:65-67`), matching round-1 §3. Still not worth doing in 030.
+- **No new over-generalisation.** The fix pass added no container/reader/format
+  abstractions; `ChestContent` remains two fields and `Region` remains a
+  min/max + world holder. The `ChestCapture` issue is about correctness of the
+  seam, not scope creep.

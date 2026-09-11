@@ -106,3 +106,106 @@ limitation to document rather than a bug.
   and `architecture.md:44-45` state that unloaded halves are invisible and
   never force-loaded, matching `ChestScanner.kt:15`; it is a deliberate MVP
   limitation, not silent data loss introduced here.
+
+## Round 2
+
+### Verdict
+Ship. The fix pass resolves round 1's only finding (the cuboid-only
+assumption is now documented in `design.md` and `architecture.md`) and the
+tester's round-1 issue 1 (the new `ChestCapture.capture` is a real production
+null/empty seam that the "no selection" test now exercises). The new tests
+genuinely pin the negative-coordinate floor math and the unloaded-chunk skip.
+The only findings are in the newly written grouper-contract prose, which is
+factually inconsistent with the code and with the 040 ticket; they are
+forward-looking documentation issues, not 030 behaviour bugs.
+
+### Issues
+
+#### 1. Grouper-contract prose contradicts the scanner seam it sits under (severity: low)
+- Location: `docs/architecture.md:49-55` vs `docs/architecture.md:60-64`
+- Problem: the scanner bullet still says `ChestScanner` keeps "Bukkit
+  block/inventory access out of grouping", but the very next bullet gives
+  `DoubleChestGrouper` the `Region` so it can "reach each block via
+  `region.world.getBlockAt(...)`". That is direct Bukkit block access inside
+  grouping, so the two adjacent sentences cannot both be true. An implementor
+  reading the seam contract gets contradictory guidance on whether grouping may
+  touch the world.
+- Reproduction: read `architecture.md:50-51` ("out of grouping") then
+  `architecture.md:62-64` (`getBlockAt` inside `DoubleChestGrouper`).
+- Suggested fix: pick one contract and word the scanner bullet to match, e.g.
+  "keeping the scanner→grouper data shape free of block/inventory handles; the
+  grouper reaches blocks only through the injected `Region`", or drop the
+  "out of grouping" claim entirely.
+
+#### 2. `region.world.getBlockAt(position)` is not a Bukkit overload (severity: low)
+- Location: `docs/architecture.md:63`, `docs/architecture.md:82`
+- Problem: `position` is `dev.cypdashuhn.uidesigner.model.BlockPos`. Bukkit's
+  `World` only exposes `getBlockAt(int, int, int)` and
+  `getBlockAt(Location)` (verified in
+  `paper-api-26.2...-sources.jar:org/bukkit/World.java:168-178`), and the repo
+  defines no `BlockPos` extension. A 040 implementor following the doc verbatim
+  hits a compile error.
+- Reproduction: write `region.world.getBlockAt(BlockPos(0, 0, 0))` — no such
+  method.
+- Suggested fix: document `region.world.getBlockAt(position.x, position.y,
+  position.z)` (or construct a `Location`).
+
+#### 3. The documented grouper input cannot be produced by the documented entry point (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/capture/ChestCapture.kt:6-7`,
+  `docs/architecture.md:36-38,60-64,74-88`, `docs/tasks/040-double-chest-grouping.md:14`
+- Problem: `architecture.md:36-38` calls `ChestCapture.capture(source, player)`
+  "the production entry point", but it returns only `List<ChestContent>?` and
+  discards the `Region`. The data flow (`:82`) then feeds
+  `DoubleChestGrouper(region, contents)`, and the grouper contract (`:60-64`)
+  needs that `Region` to reach blocks. There is no documented path from
+  `ChestCapture`'s return value to the grouper's first argument, and 040's scope
+  still says the grouper is "given `List<ChestContent>`". So the 030 output
+  type and the 040/060 contract remain unaligned, which is the exact seam the
+  round-1 architecture review asked to settle.
+- Reproduction: trace the diagram — `ChestCapture.capture` yields
+  `List<ChestContent>?`; `DoubleChestGrouper(region, contents)` needs a `Region`
+  that the entry point threw away.
+- Suggested fix: either have `ChestCapture` return a small result carrying the
+  `Region` alongside the contents (or return the `Region` and let 060 call
+  `ChestScanner.scan`), or state explicitly in `architecture.md` and 040 that
+  060 calls `SelectionSource.selectionOf` + `ChestScanner.scan` directly and
+  that `ChestCapture` is only the null/empty convenience.
+
+### Non-issues
+- **Round-1 finding 1 is resolved.** `docs/design.md:57-59` and
+  `docs/architecture.md:39-42` now state the cuboid-only bounding-box
+  behaviour for `//hcyl`/`//poly`, which matches `FaweSelectionSource.kt:25-37`
+  (it keeps only `minimumPoint`/`maximumPoint`). Accurate.
+- **`ChestCapture` preserves the null/empty semantics and the FAWE path.**
+  `source.selectionOf(player)?.let(ChestScanner::scan)`
+  (`ChestCapture.kt:6-7`) returns `null` exactly when `selectionOf` is `null`
+  and an empty list for a valid region with no chests; it adds no WorldEdit call
+  and does not alter `FaweSelectionSource`. The `no selection` test now goes
+  through this production object (`ChestScannerTest.kt:42-44`), not just the
+  fake.
+- **The negative-coordinate test really pins floor semantics.** `-17` with
+  `x / 16` would be `-1`, and only chunks `(0,0)` and `(-2,0)` are loaded, so a
+  truncating refactor would return an empty list and fail
+  (`ChestScannerTest.kt:128-136`). `x shr 4` maps `-17` to `-2` as intended.
+- **The unloaded-chunk test asserts its premise.** `assertFalse(world
+  .isChunkLoaded(1, 0))` runs before the scan (`ChestScannerTest.kt:142-143`),
+  and `WorldMock.getBlockAt` stores blocks in a world map independent of
+  `loadedChunks` (verified in `mockbukkit-v26.2-4.116.1-sources.jar`), so the
+  chest exists but the scanner's guard is what skips it. The test exercises the
+  production branch, not a missing block.
+- **The adjacent-chest test's limits are stated, not hidden.**
+  `ChestStateMock.getBlockInventory()` returns `getInventory()` (verified,
+  `ChestStateMock.java:93-95`), so the test cannot distinguish the two; but
+  `architecture.md:56-59` says exactly that and scopes the test to "adjacent
+  chest blocks yield separate 27-slot entries". Not a false claim, and no
+  production behaviour changed.
+- **`Chest.getBlockInventory()` is still the right call.** Paper's javadoc
+  (verified in `paper-api-26.2...-sources.jar:org/bukkit/block/Chest.java:14-29`)
+  confirms a double chest's half returns only its 27-slot portion, so 040 still
+  receives independent halves.
+- **No regression from the fix pass.** The only production addition is
+  `ChestCapture.kt`; `ChestScanner`, `Region`, `FaweSelectionSource`,
+  `ChestContent`, `BlockPos` and `UiChest` are byte-for-byte the round-1 code.
+  Ordering (`x→y→z`), per-axis `Region` normalisation, the inclusive scan
+  bounds, cloning, and the main-thread-only path are unchanged.
+- **Still no JSON here**, so `docs/data-format.md` cannot be mismatched by 030.

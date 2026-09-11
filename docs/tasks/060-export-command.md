@@ -12,8 +12,8 @@ JSON to the configured output path.
 
 ## Scope
 - `UiDesignerCommand` with subcommands `save`, `reload`, `help` (CommandAPI).
-- `save` pipeline: `SelectionSource` → `ChestScanner` → `DoubleChestGrouper` →
-  `JsonExporter` → `config.outputFile`.
+- `save` pipeline: `SelectionSource` → `ChestCapture` (region + contents) →
+  `DoubleChestGrouper(region, contents)` → `JsonExporter` → `config.outputFile`.
 - Feedback: number of chests exported and the written path; errors for no
   selection, empty selection, and IO failure.
 - Permission node for `save` (e.g. `uidesigner.save`), default op.

@@ -15,7 +15,7 @@ uidesigner/
     ChestContent.kt          capture-side intermediate: chest position + inventory
     SelectionSource.kt       interface: player -> region (seam for tests)
     FaweSelectionSource.kt   FAWE-backed implementation
-    ChestCapture.kt          selection source + player -> list<ChestContent>? (null = no selection)
+    ChestCapture.kt          selection source + player -> CapturedSelection? (region + contents)
     ChestScanner.kt          region -> list<ChestContent>, filters chest blocks
     DoubleChestGrouper.kt    merges double-chest halves into one design
   naming/
@@ -32,10 +32,12 @@ uidesigner/
 ## Seams
 
 - **`SelectionSource`** isolates FAWE. `ChestScanner` takes a `Region` (which
-  carries its `World`), never touching WorldEdit directly, so scanning and
-  grouping are testable with fakes. `ChestCapture.capture(source, player)` is
-  the production entry point that glues the two: `null` means the player has no
-  usable selection, an empty list means the selection contained no chests.
+  carries its `World`), never touching WorldEdit directly, so `SelectionSource`
+  and `ChestScanner` are testable with fakes. `ChestCapture.capture(source,
+  player)` is the production entry point that glues the two: `null` means the
+  player has no usable selection; otherwise it returns a `CapturedSelection`
+  carrying the `Region` and its `List<ChestContent>` (empty when the selection
+  contained no chests).
 - **`Region` is cuboid-only.** `FaweSelectionSource` reduces any FAWE selection
   (including non-cuboid `//hcyl`/`//poly`) to its min/max bounding box, so a
   chest inside the box but outside the actual selection is captured. Shape
@@ -46,9 +48,11 @@ uidesigner/
   Bukkit `ItemStack`s, so putting it in `model` would break that package's
   purity. `BlockPos` moved from `UiChest.kt` to `model/BlockPos.kt` in the same
   ticket, once `Region`/`ChestContent` became its second consumer.
-- **`ChestScanner`** turns Bukkit `Block`/`Inventory` into the capture-side
-  model (`ChestContent`), keeping Bukkit block/inventory access out of grouping
-  and all Bukkit types out of export. It returns one entry per chest block,
+- **`ChestScanner`** is the only place that *enumerates* blocks and reads
+  inventories, turning Bukkit `Block`/`Inventory` into the capture-side model
+  (`ChestContent`); grouping may do targeted block lookups through the injected
+  `Region` (Bukkit-coupled by design, testable with MockBukkit), and only
+  `model`/`export` are fully Bukkit-free. It returns one entry per chest block,
   ordered by `x`, then `y`, then `z`, and skips blocks in unloaded chunks rather
   than forcing a chunk load. Each entry reads the block's own 27-slot inventory
   (`Chest.getBlockInventory`), not the shared double-chest inventory, so a
@@ -60,8 +64,9 @@ uidesigner/
 - **Grouper input contract (040/060).** `ChestContent` stays `position + items`
   only. `DoubleChestGrouper` receives the `Region` alongside the
   `List<ChestContent>`, so it can reach each block via
-  `region.world.getBlockAt(position)` for `DoubleChest`-holder detection; 060
-  reads chest names from the same blocks with `ChestNamer.nameOf(block)`.
+  `region.world.getBlockAt(position.x, position.y, position.z)` for
+  `DoubleChest`-holder detection; 060 reads chest names from the same blocks
+  with `ChestNamer.nameOf(block)`.
 - **Chest predicate duplication.** `ChestScanner` and `ChestNamer` each define
   their own chest-material check; this is a deliberate carry-over until a third
   consumer appears, then extract one shared `isChest`.
@@ -78,10 +83,12 @@ player + FAWE selection
    Region? (min/max corners + world; null = no selection)
         │  ChestCapture.capture -> ChestScanner.scan
         ▼
- List<ChestContent>?         (one per chest *block*, double halves separate)
-        │  DoubleChestGrouper(region, contents) -> reads blocks via world.getBlockAt
+  CapturedSelection?          (region + List<ChestContent>, one per chest *block*;
+        │                      empty contents = selection had no chests)
+        │  DoubleChestGrouper(selection.region, selection.contents)
+        │  -> region.world.getBlockAt(position.x, position.y, position.z)
         ▼
- List<UiChest>               (double chests merged; JsonExporter owns ordering)
+  List<UiChest>               (double chests merged; JsonExporter owns ordering)
         │  JsonExporter
         ▼
         JSON file (config.outputFile)

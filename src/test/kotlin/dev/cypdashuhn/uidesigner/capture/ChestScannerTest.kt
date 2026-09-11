@@ -11,7 +11,6 @@ import org.bukkit.inventory.ItemStack
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -50,7 +49,7 @@ class ChestScannerTest {
 
         assertEquals(
             emptyList<ChestContent>(),
-            ChestCapture.capture(FakeSelectionSource(region(0, 0, 0, 1, 0, 0)), player),
+            capture(FakeSelectionSource(region(0, 0, 0, 1, 0, 0))).contents,
         )
     }
 
@@ -70,7 +69,7 @@ class ChestScannerTest {
                 BlockPos(0, 2, 0),
                 BlockPos(2, 0, 0),
             ),
-            captured.map { it.position },
+            captured.contents.map { it.position },
         )
     }
 
@@ -86,7 +85,7 @@ class ChestScannerTest {
 
         assertEquals(
             listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)),
-            captured.map { it.position },
+            captured.contents.map { it.position },
         )
     }
 
@@ -95,7 +94,7 @@ class ChestScannerTest {
         val chest = blockAt(Material.CHEST, 0, 0, 0).state as Chest
         chest.blockInventory.setItem(5, namedItem(Material.STONE, "Stone"))
 
-        val content = capture(FakeSelectionSource(region(0, 0, 0, 0, 0, 0))).single()
+        val content = capture(FakeSelectionSource(region(0, 0, 0, 0, 0, 0))).contents.single()
 
         assertEquals(27, content.items.size)
         assertNull(content.items[0])
@@ -113,7 +112,7 @@ class ChestScannerTest {
         left.blockInventory.setItem(0, ItemStack(Material.STONE))
         right.blockInventory.setItem(0, ItemStack(Material.DIRT))
 
-        val captured = capture(FakeSelectionSource(region(0, 0, 0, 1, 0, 0)))
+        val captured = capture(FakeSelectionSource(region(0, 0, 0, 1, 0, 0))).contents
 
         assertEquals(
             listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)),
@@ -122,17 +121,19 @@ class ChestScannerTest {
         assertEquals(listOf(27, 27), captured.map { it.items.size })
         assertEquals(Material.STONE, captured[0].items[0]?.type)
         assertEquals(Material.DIRT, captured[1].items[0]?.type)
-        assertNotSame(captured[0].items[0], captured[1].items[0])
+
+        captured[0].items[0]!!.amount = 42
+        assertEquals(1, captured[1].items[0]?.amount)
     }
 
     @Test
     fun `negative coordinates use floor chunk lookup`() {
-        world.getChunkAt(-2, 0)
-        blockAt(Material.CHEST, -17, 0, 0)
+        world.getChunkAt(-2, -2)
+        blockAt(Material.CHEST, -17, 0, -17)
 
-        val captured = capture(FakeSelectionSource(region(-17, 0, 0, -17, 0, 0)))
+        val captured = capture(FakeSelectionSource(region(-17, 0, -17, -17, 0, -17)))
 
-        assertEquals(listOf(BlockPos(-17, 0, 0)), captured.map { it.position })
+        assertEquals(listOf(BlockPos(-17, 0, -17)), captured.contents.map { it.position })
     }
 
     @Test
@@ -140,10 +141,12 @@ class ChestScannerTest {
         blockAt(Material.CHEST, 16, 0, 0)
 
         assertFalse(world.isChunkLoaded(1, 0))
-        assertTrue(capture(FakeSelectionSource(region(16, 0, 0, 16, 0, 0))).isEmpty())
+        assertTrue(
+            capture(FakeSelectionSource(region(16, 0, 0, 16, 0, 0))).contents.isEmpty(),
+        )
     }
 
-    private fun capture(source: SelectionSource): List<ChestContent> =
+    private fun capture(source: SelectionSource): CapturedSelection =
         checkNotNull(ChestCapture.capture(source, player))
 
     private fun namedItem(material: Material, name: String): ItemStack {

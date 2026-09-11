@@ -125,3 +125,87 @@ are large; the suite stays small and behaviour-shaped rather than padded.
   `selectionOf`→`scan` boilerplate from six tests; the problem is only the
   null-selection test relying on its short-circuit (issue 1), not the helper's
   existence.
+
+## Round 2
+
+### Verdict
+
+Ship. All five round-1 issues are resolved: the null-selection path now runs
+through a production entry point, the clone and floor-shift behaviours are
+pinned, the unloaded-chunk premise is explicit, and the MockBukkit double-chest
+limitation is documented. The suite stays small (10 tests) and behaviour-shaped;
+the only remaining items are two low-severity, optional refinements.
+
+### Issues
+
+#### 1. Negative-coordinate coverage only pins the x-axis (severity: low)
+- Location: `src/test/kotlin/dev/cypdashuhn/uidesigner/capture/ChestScannerTest.kt:128-136`;
+  `src/main/kotlin/dev/cypdashuhn/uidesigner/capture/ChestScanner.kt:15`.
+- Problem: the test pins `x shr 4` (`-17 → -2`) but the scanner also uses
+  `z shr 4`. A z-only refactor to `z / 16` would misidentify chunks for negative
+  z and no test would fail. The two axes are symmetric, so this is a small gap,
+  not a defect.
+- Suggested fix: place the chest at `(-17, 0, -17)` and load chunk `(-2, -2)`
+  in the existing test, or state explicitly that x coverage is representative.
+  One coordinate change, no new test needed.
+
+#### 2. `assertNotSame` in the adjacent-chest test is trivially true (severity: low)
+- Location: `src/test/kotlin/dev/cypdashuhn/uidesigner/capture/ChestScannerTest.kt:125`.
+- Problem: the two source stacks are distinct objects written to separate slots,
+  and MockBukkit's `getContents()` returns a distinct mirror per slot, so the
+  assertion passes even if `.clone()` is dropped. The clone pin already lives at
+  `:105-106`, so this line is redundant rather than wrong.
+- Suggested fix: drop it, or replace it with a check that earns its place, e.g.
+  each captured list has exactly one non-null entry, or mutating one captured
+  stack leaves the other chest's slot untouched.
+
+### Non-issues
+
+- **Round-1 issue 1 is closed.** `ChestCapture.capture` (`ChestCapture.kt:6-7`)
+  is a real production consumer of `SelectionSource`, and
+  `assertNull(ChestCapture.capture(FakeSelectionSource(null), player))`
+  (`ChestScannerTest.kt:43`) asserts the null mapping in production code. The
+  null vs empty distinction is now covered on both sides (`:43` null, `:51-54`
+  empty list).
+- **Round-1 issue 2 is closed, and the adjacent test still earns its place.**
+  I confirmed in the MockBukkit 4.116.1 sources that `ChestStateMock.getBlockInventory()`
+  returns `getInventory()` (`ChestStateMock.java:93-96`) and each `ChestStateMock`
+  creates its own 27-slot `ChestInventoryMock` with no automatic double-chest
+  linking, so the test cannot distinguish `blockInventory` from `inventory`. It
+  still pins a real behaviour: two adjacent chest blocks yield two separate
+  27-slot entries with independent contents, and it would start catching a
+  shared-inventory mistake if MockBukkit gained real double-chest support
+  (Paper's `blockInventory` still returns the half). The limitation is now
+  recorded in `docs/architecture.md` and `docs/design.md`, exactly as the
+  round-1 fix asked. Keeping the test is right.
+- **Round-1 issue 3 is closed.** `ChestScannerTest.kt:105-106` mutates the
+  captured stack and asserts the chest's stored amount is still `1`. MockBukkit
+  `InventoryMock.getContents()` returns write-through `ItemStackMirror`s
+  (`InventoryMock.java:321-326`, `ItemStackMirror.setAmount` delegates to the
+  backing stack), so dropping `.clone()` would make this assertion fail. The
+  clone is genuinely pinned.
+- **Round-1 issue 4 is addressed for x, and `-17` is a good choice.** `-17 shr 4
+  == -2` while `-17 / 16 == -1`; the test loads chunk `(-2, 0)`, so a `/`
+  refactor would check the unloaded `(-1, 0)` and skip the chest, failing the
+  test. Using `-17` rather than `-1` also avoids the `-1 / 16 == 0` coincidence
+  with the `(0, 0)` chunk loaded in `setUp`. Only the missing z-axis is issue 1.
+- **Round-1 issue 5 is closed.** `assertFalse(world.isChunkLoaded(1, 0))`
+  (`ChestScannerTest.kt:142`) states the premise explicitly. `WorldMock.getBlockAt`
+  reads a `blocks` map independent of `loadedChunks` (`WorldMock.java:457-467`)
+  and does not load chunks, so the premise is real and the test covers the
+  intended skip branch rather than an accident.
+- **The `checkNotNull` helper is a strict fixture.** `ChestScannerTest.kt:146-147`
+  turns an unexpected `null` into a test failure instead of silently passing,
+  which is the right behaviour for the non-null cases.
+- **No excessive tests.** Ten tests across `ChestScannerTest`/`RegionTest` for
+  the ticket's branches. `adjacent chests`, `only chest blocks`, and `several
+  single chests` overlap on the material filter but each covers a distinct
+  scenario (adjacency, filtering, ordering); only the single assertion in issue 2
+  is removable.
+- **`FaweSelectionSource` remaining untested is still acceptable.** Unchanged
+  from round 1: it needs a live WorldEdit session manager, the adapter is thin,
+  and its null contract is now at least consumed and pinned through
+  `ChestCapture`. A unit test here would be heavy faking for little value.
+- **The 27-slot `items` assertion is contract, not incidental structure.**
+  `ChestScannerTest.kt:100-103` pins the `List<ItemStack?>` capture shape that
+  040 consumes, so it is deliberate and worth keeping.
