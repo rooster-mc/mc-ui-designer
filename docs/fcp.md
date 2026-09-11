@@ -5,16 +5,6 @@ files with the docs that describe them, based on `fcp:` frontmatter in the
 markdown docs. We use it to answer "which doc explains this file?" and "which
 files does this doc cover?" without guessing.
 
-## Build it
-
-```sh
-just install          # in /home/cyp/repos/fcp -> build/install/fcp/bin/fcp
-# or, without installing:
-just run query src/main/kotlin/... --docs-dir docs --project-root .
-```
-
-`fcp` assumes `rg` (ripgrep) is on `PATH`.
-
 ## Use it
 
 From this repository root:
