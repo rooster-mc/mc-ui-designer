@@ -99,10 +99,18 @@ class UiDesignerPluginTest {
         val malformed = "output-file: [unclosed\n"
         written.writeText(malformed)
 
-        plugin.reloadConfiguration()
+        val readable = plugin.reloadConfiguration()
 
+        assertFalse(readable)
         assertEquals(malformed, written.readText())
         assertFalse(plugin.config.isSet(UiDesignerConfig.OUTPUT_FILE_KEY))
+    }
+
+    @Test
+    fun `reload reports a readable config`() {
+        val plugin = MockBukkit.load(UiDesignerPlugin::class.java)
+
+        assertTrue(plugin.reloadConfiguration())
     }
 
     private fun packagedConfigText(): String =

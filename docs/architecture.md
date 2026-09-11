@@ -116,8 +116,14 @@ uidesigner/
   dispatch. `save` runs on the CommandAPI player executor (main thread); file
   IO stays synchronous for the MVP. `save` requires `uidesigner.save` and
   `reload` requires `uidesigner.reload`, both defaulting to op; `help` and the
-  bare root need no permission. `reload`, `help`, and the root accept any
-  sender (console included); only `save` is player-only.
+  bare root need no permission. The nodes are declared in `build.gradle.kts`
+  and checked inside each executor, so a missing permission sends
+  `Messages.noPermission()` rather than failing at parse time; `Messages` owns
+  every player-facing component (prefix, colour, wording). `reload`, `help`,
+  and the root accept any sender (console included); only `save` is
+  player-only. CommandAPI suggests the registered subcommand literals
+  automatically, and `/chest-edit` adds a `clear` suggestion for its optional
+  name argument.
 - **`JsonExporter`** is the single ordering authority: it sorts chests by
   canonical position and rows/slots by index. The grouper (040) merges double
   chests and must not re-sort; the exporter normalises order.

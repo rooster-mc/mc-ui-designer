@@ -1,19 +1,21 @@
 package dev.cypdashuhn.uidesigner.commands
 
-import com.mojang.brigadier.exceptions.CommandSyntaxException
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
+import dev.cypdashuhn.uidesigner.util.Messages
 import dev.jorel.commandapi.CommandAPITestUtilities
 import dev.jorel.commandapi.MockCommandAPIPlugin
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.Material
 import org.bukkit.block.Block
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockbukkit.mockbukkit.MockBukkit
 import org.mockbukkit.mockbukkit.ServerMock
+import org.mockbukkit.mockbukkit.entity.PlayerMock
 import org.mockbukkit.mockbukkit.world.WorldMock
 
 class ChestEditCommandTest {
@@ -93,8 +95,7 @@ class ChestEditCommandTest {
         val chest = blockAt(Material.CHEST)
         val plugin = MockCommandAPIPlugin.load()
         ChestEditCommand(plugin) { chest }.register()
-        val player = server.addPlayer()
-        player.isOp = true
+        val player = opPlayer()
 
         CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit Shop")
 
@@ -107,11 +108,25 @@ class ChestEditCommandTest {
         ChestNamer.setName(chest, "Shop")
         val plugin = MockCommandAPIPlugin.load()
         ChestEditCommand(plugin) { chest }.register()
-        val player = server.addPlayer()
-        player.isOp = true
+        val player = opPlayer()
 
         CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit clear")
 
+        assertNull(ChestNamer.nameOf(chest))
+    }
+
+    @Test
+    fun `bare chest-edit prints usage and does not name the chest`() {
+        val chest = blockAt(Material.CHEST)
+        val plugin = MockCommandAPIPlugin.load()
+        ChestEditCommand(plugin) { chest }.register()
+        val player = opPlayer()
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit")
+
+        val message = plainMessage(player)
+        assertTrue(message.contains("Usage"))
+        assertTrue(message.contains("clear"))
         assertNull(ChestNamer.nameOf(chest))
     }
 
@@ -122,10 +137,10 @@ class ChestEditCommandTest {
         ChestEditCommand(plugin) { chest }.register()
         val player = server.addPlayer()
 
-        assertThrows(CommandSyntaxException::class.java) {
-            CommandAPITestUtilities.dispatchCommand(player, "chest-edit Shop")
-        }
+        CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit Shop")
+
         assertNull(ChestNamer.nameOf(chest))
+        assertEquals(Messages.noPermission(), player.nextComponentMessage())
     }
 
     @Test
@@ -134,12 +149,27 @@ class ChestEditCommandTest {
         val plugin = MockCommandAPIPlugin.load()
         ChestEditCommand(plugin) { chest }.register()
         val player = server.addPlayer()
-        player.addAttachment(plugin, "uidesigner.chest-edit", true)
+        player.addAttachment(plugin, ChestEditCommand.PERMISSION, true)
 
         CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit Shop")
 
         assertEquals("Shop", ChestNamer.nameOf(chest))
     }
+
+    @Test
+    fun `tab completion suggests clear`() {
+        val plugin = MockCommandAPIPlugin.load()
+        ChestEditCommand(plugin) { null }.register()
+
+        CommandAPITestUtilities.assertCommandSuggests(opPlayer(), "chest-edit ", "clear")
+    }
+
+    private fun opPlayer(): PlayerMock = server.addPlayer().apply { isOp = true }
+
+    private fun plainMessage(player: PlayerMock): String =
+        PlainTextComponentSerializer
+            .plainText()
+            .serialize(checkNotNull(player.nextComponentMessage()))
 
     private fun command() = ChestEditCommand(MockBukkit.createMockPlugin())
 

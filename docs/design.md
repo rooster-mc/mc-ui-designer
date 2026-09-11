@@ -66,6 +66,12 @@ Out of scope (backlog):
   into the packaged `config.yml`.
 - **Command root:** `/uidesigner` (alias `/uid`); the chest naming command is
   the separate top-level `/chest-edit`.
+- **Permissions:** `uidesigner.save`, `uidesigner.reload`, and
+  `uidesigner.chest-edit` default to op and are declared in `build.gradle.kts`
+  (the command classes hold the node strings as constants). Each privileged
+  executor checks its node before acting and replies with a prefixed denial
+  message, so a missing permission is a clear chat line rather than a Brigadier
+  parse failure. `help` and the bare `/uidesigner` root are permission-free.
 - **Casing:** the JSON keys are normalised to `camelCase` and made valid JSON.
   See `docs/data-format.md` for the corrected schema and the delta from the
   original draft.
@@ -78,7 +84,8 @@ Out of scope (backlog):
   the loaded half; 040 and the exporter likewise only see loaded halves.
   `/chest-edit clear` (case-insensitive) is
   reserved for removal and blank input also clears, so a literal name "clear"
-  is unreachable. For an unlinked geometry-merged double (no `DoubleChest`
+  is unreachable. Bare `/chest-edit` prints a usage line instead of touching the
+  targeted block. For an unlinked geometry-merged double (no `DoubleChest`
   holder), `nameOf` sees only the canonical half, so a name on the other half
   is not exported; carrying both merged positions out of the grouper is
   deferred.

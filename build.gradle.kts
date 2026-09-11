@@ -1,4 +1,5 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import net.minecrell.pluginyml.bukkit.BukkitPluginDescription.Permission
 import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
@@ -67,6 +68,20 @@ bukkit {
     main = "dev.cypdashuhn.uidesigner.UiDesignerPlugin"
     apiVersion = "26.2"
     depend = listOf("FastAsyncWorldEdit")
+    permissions {
+        register("uidesigner.save") {
+            description = "Export the selected chest designs to JSON"
+            default = Permission.Default.OP
+        }
+        register("uidesigner.reload") {
+            description = "Reload config.yml"
+            default = Permission.Default.OP
+        }
+        register("uidesigner.chest-edit") {
+            description = "Name or clear the chest the player is looking at"
+            default = Permission.Default.OP
+        }
+    }
 }
 
 tasks.processResources {

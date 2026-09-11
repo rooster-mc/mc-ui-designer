@@ -9,6 +9,7 @@ import dev.cypdashuhn.uidesigner.export.JsonExporter
 import dev.cypdashuhn.uidesigner.model.BlockPos
 import dev.cypdashuhn.uidesigner.model.UiChest
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
+import dev.cypdashuhn.uidesigner.util.Messages
 import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.executors.CommandExecutor
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
@@ -21,7 +22,7 @@ class UiDesignerCommand(
     private val plugin: JavaPlugin,
     private val selectionSource: SelectionSource,
     private val configProvider: () -> UiDesignerConfig,
-    private val reloadAction: () -> Unit,
+    private val reloadAction: () -> Boolean,
     private val exporter: (List<UiChest>, Path) -> Unit = JsonExporter::export,
 ) {
     sealed interface SaveOutcome {
@@ -40,24 +41,45 @@ class UiDesignerCommand(
         ) : SaveOutcome
     }
 
+    sealed interface ReloadOutcome {
+        data class Reloaded(
+            val outputFile: Path,
+        ) : ReloadOutcome
+
+        data class UsingDefaults(
+            val outputFile: Path,
+        ) : ReloadOutcome
+
+        data class Failed(
+            val reason: String,
+        ) : ReloadOutcome
+    }
+
     fun register() {
         val reloadExecutor =
-            CommandExecutor { sender, _ -> sender.sendMessage(reloadFeedback()) }
-        val helpExecutor = CommandExecutor { sender, _ -> sender.sendMessage(helpMessage()) }
+            CommandExecutor { sender, _ ->
+                if (!sender.hasPermission(RELOAD_PERMISSION)) {
+                    sender.sendMessage(Messages.noPermission())
+                } else {
+                    sender.sendMessage(reloadMessage(reload()))
+                }
+            }
+        val helpExecutor = CommandExecutor { sender, _ -> sender.sendMessage(Messages.help()) }
         CommandAPICommand("uidesigner")
             .withAliases("uid")
             .withSubcommand(
                 CommandAPICommand("save")
-                    .withPermission("uidesigner.save")
                     .executesPlayer(
                         PlayerCommandExecutor { player, _ ->
-                            player.sendMessage(saveMessage(save(player)))
+                            if (!player.hasPermission(SAVE_PERMISSION)) {
+                                player.sendMessage(Messages.noPermission())
+                            } else {
+                                player.sendMessage(saveMessage(save(player)))
+                            }
                         },
                     ),
             ).withSubcommand(
-                CommandAPICommand("reload")
-                    .withPermission("uidesigner.reload")
-                    .executes(reloadExecutor),
+                CommandAPICommand("reload").executes(reloadExecutor),
             ).withSubcommand(
                 CommandAPICommand("help").executes(helpExecutor),
             ).executes(helpExecutor)
@@ -89,10 +111,18 @@ class UiDesignerCommand(
         }
     }
 
-    fun reload(): Path {
-        reloadAction()
-        return configProvider().outputFile
-    }
+    fun reload(): ReloadOutcome =
+        runCatching {
+            val readable = reloadAction()
+            val outputFile = configProvider().outputFile
+            if (readable) {
+                ReloadOutcome.Reloaded(outputFile)
+            } else {
+                ReloadOutcome.UsingDefaults(outputFile)
+            }
+        }.getOrElse { e ->
+            ReloadOutcome.Failed(e.message ?: e.javaClass.simpleName)
+        }
 
     private fun failure(e: Exception, outputFile: Path? = null): SaveOutcome.WriteFailed =
         SaveOutcome.WriteFailed(outputFile, e.message ?: e.javaClass.simpleName)
@@ -102,39 +132,21 @@ class UiDesignerCommand(
 
     private fun saveMessage(outcome: SaveOutcome): Component =
         when (outcome) {
-            is SaveOutcome.Exported -> {
-                val noun = if (outcome.chests == 1) "design" else "designs"
-                Component.text(
-                    "Exported ${outcome.chests} chest $noun to ${outcome.outputFile} " +
-                        "(a double chest counts once).",
-                )
-            }
-            SaveOutcome.NoSelection ->
-                Component.text("No WorldEdit selection. Select a region first.")
-            SaveOutcome.NoChests ->
-                Component.text(
-                    "The selection contains no chests. Place chests inside the selected " +
-                        "region (loaded chunks only).",
-                )
-            is SaveOutcome.WriteFailed -> {
-                val target = outcome.outputFile?.let { " to $it" } ?: ""
-                Component.text("Could not write the export$target: ${outcome.reason}")
-            }
+            is SaveOutcome.Exported -> Messages.saveSuccess(outcome.chests, outcome.outputFile)
+            SaveOutcome.NoSelection -> Messages.noSelection()
+            SaveOutcome.NoChests -> Messages.noChests()
+            is SaveOutcome.WriteFailed -> Messages.writeFailed(outcome.outputFile, outcome.reason)
         }
 
-    private fun reloadMessage(outputFile: Path): Component =
-        Component.text("Reloaded config.yml. Output file: $outputFile.")
-
-    private fun reloadFeedback(): Component =
-        runCatching { reload() }.fold(::reloadMessage) { e ->
-            Component.text("Could not reload config.yml: ${e.message ?: e.javaClass.simpleName}")
+    private fun reloadMessage(outcome: ReloadOutcome): Component =
+        when (outcome) {
+            is ReloadOutcome.Reloaded -> Messages.reloadSuccess(outcome.outputFile)
+            is ReloadOutcome.UsingDefaults -> Messages.reloadUsingDefaults(outcome.outputFile)
+            is ReloadOutcome.Failed -> Messages.reloadFailed(outcome.reason)
         }
 
-    private fun helpMessage(): Component =
-        Component.text(
-            "UiDesigner commands:\n" +
-                "/uidesigner save - export the selected chest designs to JSON\n" +
-                "/uidesigner reload - reload config.yml\n" +
-                "/uidesigner help - show this help",
-        )
+    companion object {
+        const val SAVE_PERMISSION = "uidesigner.save"
+        const val RELOAD_PERMISSION = "uidesigner.reload"
+    }
 }

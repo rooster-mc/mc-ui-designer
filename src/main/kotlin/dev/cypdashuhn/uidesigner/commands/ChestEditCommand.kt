@@ -1,10 +1,11 @@
 package dev.cypdashuhn.uidesigner.commands
 
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
+import dev.cypdashuhn.uidesigner.util.Messages
 import dev.jorel.commandapi.CommandAPICommand
 import dev.jorel.commandapi.arguments.GreedyStringArgument
+import dev.jorel.commandapi.arguments.SafeSuggestions
 import dev.jorel.commandapi.executors.PlayerCommandExecutor
-import net.kyori.adventure.text.Component
 import org.bukkit.block.Block
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
@@ -28,20 +29,27 @@ class ChestEditCommand(
 
     fun register() {
         CommandAPICommand("chest-edit")
-            .withPermission("uidesigner.chest-edit")
-            .withArguments(GreedyStringArgument("name"))
-            .executesPlayer(
+            .withArguments(
+                GreedyStringArgument("name")
+                    .replaceSafeSuggestions(SafeSuggestions.suggest("clear"))
+                    .setOptional(true),
+            ).executesPlayer(
                 PlayerCommandExecutor { player, args ->
-                    val rawName = args["name"] as String
-                    when (val outcome = apply(targetResolver(player), rawName)) {
-                        is Outcome.Named ->
-                            player.sendMessage(
-                                Component.text("Named this chest \"${outcome.name}\".")
-                            )
-                        Outcome.Cleared ->
-                            player.sendMessage(Component.text("Cleared this chest's name."))
-                        Outcome.NotAChest ->
-                            player.sendMessage(Component.text("Look at a chest to name it."))
+                    when {
+                        !player.hasPermission(PERMISSION) ->
+                            player.sendMessage(Messages.noPermission())
+                        args["name"] == null ->
+                            player.sendMessage(Messages.chestEditUsage())
+                        else -> {
+                            val rawName = args["name"] as String
+                            when (val outcome = apply(targetResolver(player), rawName)) {
+                                is Outcome.Named ->
+                                    player.sendMessage(Messages.chestEditNamed(outcome.name))
+                                Outcome.Cleared -> player.sendMessage(Messages.chestEditCleared())
+                                Outcome.NotAChest ->
+                                    player.sendMessage(Messages.chestEditNotAChest())
+                            }
+                        }
                     }
                 },
             ).register(plugin)
@@ -59,5 +67,9 @@ class ChestEditCommand(
         }
         ChestNamer.setName(target, rawName)
         return Outcome.Named(rawName)
+    }
+
+    companion object {
+        const val PERMISSION = "uidesigner.chest-edit"
     }
 }

@@ -1,6 +1,5 @@
 package dev.cypdashuhn.uidesigner.commands
 
-import com.mojang.brigadier.exceptions.CommandSyntaxException
 import dev.cypdashuhn.uidesigner.capture.Region
 import dev.cypdashuhn.uidesigner.capture.SelectionSource
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
@@ -9,6 +8,7 @@ import dev.cypdashuhn.uidesigner.model.BlockPos
 import dev.cypdashuhn.uidesigner.model.DesignJson
 import dev.cypdashuhn.uidesigner.model.UiChest
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
+import dev.cypdashuhn.uidesigner.util.Messages
 import dev.jorel.commandapi.CommandAPITestUtilities
 import dev.jorel.commandapi.MockCommandAPIPlugin
 import kotlinx.serialization.decodeFromString
@@ -25,7 +25,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -211,7 +210,7 @@ class UiDesignerCommandTest {
                 plugin = MockBukkit.createMockPlugin(),
                 selectionSource = FakeSelectionSource(region(0, 0, 0, 0, 0, 0)),
                 configProvider = { throw IllegalStateException("missing default output") },
-                reloadAction = {},
+                reloadAction = { true },
             )
 
         val outcome = command.save(player)
@@ -237,13 +236,43 @@ class UiDesignerCommandTest {
                 reloadAction = {
                     reloaded = true
                     current = after
+                    true
                 },
             )
 
-        val output = command.reload()
+        val outcome = command.reload()
 
         assertTrue(reloaded)
-        assertEquals(after, output)
+        assertEquals(UiDesignerCommand.ReloadOutcome.Reloaded(after), outcome)
+    }
+
+    @Test
+    fun `reload reports defaults when the config could not be read`() {
+        val command =
+            UiDesignerCommand(
+                plugin = MockBukkit.createMockPlugin(),
+                selectionSource = FakeSelectionSource(null),
+                configProvider = { config(DEFAULT_OUTPUT) },
+                reloadAction = { false },
+            )
+
+        assertEquals(
+            UiDesignerCommand.ReloadOutcome.UsingDefaults(DEFAULT_OUTPUT),
+            command.reload(),
+        )
+    }
+
+    @Test
+    fun `reload reports a failure without throwing`() {
+        val command =
+            UiDesignerCommand(
+                plugin = MockBukkit.createMockPlugin(),
+                selectionSource = FakeSelectionSource(null),
+                configProvider = { config(DEFAULT_OUTPUT) },
+                reloadAction = { throw IllegalStateException("bad config") },
+            )
+
+        assertEquals(UiDesignerCommand.ReloadOutcome.Failed("bad config"), command.reload())
     }
 
     @Test
@@ -274,10 +303,10 @@ class UiDesignerCommandTest {
             exporter = { _, _ -> exported = true },
         )
 
-        assertThrows(CommandSyntaxException::class.java) {
-            CommandAPITestUtilities.dispatchCommand(player, "uidesigner save")
-        }
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
+
         assertFalse(exported)
+        assertEquals(Messages.noPermission(), player.nextComponentMessage())
     }
 
     @Test
@@ -290,7 +319,7 @@ class UiDesignerCommandTest {
             region(0, 0, 0, 0, 0, 0),
             exporter = { _, _ -> exported = true },
         )
-        player.addAttachment(plugin, "uidesigner.save", true)
+        player.addAttachment(plugin, UiDesignerCommand.SAVE_PERMISSION, true)
 
         CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
 
@@ -301,7 +330,13 @@ class UiDesignerCommandTest {
     fun `dispatch of reload runs the reload for an op`() {
         var reloaded = false
         val plugin = MockCommandAPIPlugin.load()
-        registeredCommand(plugin, reloadAction = { reloaded = true })
+        registeredCommand(
+            plugin,
+            reloadAction = {
+                reloaded = true
+                true
+            },
+        )
         player.isOp = true
 
         CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner reload")
@@ -323,10 +358,30 @@ class UiDesignerCommandTest {
     }
 
     @Test
+    fun `dispatch of reload reports defaults when the config could not be read`() {
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(plugin, reloadAction = { false })
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner reload")
+
+        val message = plainMessage()
+        assertTrue(message.contains("could not be read"))
+        assertTrue(message.contains("defaults"))
+        assertTrue(message.contains(DEFAULT_OUTPUT.toString()))
+    }
+
+    @Test
     fun `console can reload`() {
         var reloaded = false
         val plugin = MockCommandAPIPlugin.load()
-        registeredCommand(plugin, reloadAction = { reloaded = true })
+        registeredCommand(
+            plugin,
+            reloadAction = {
+                reloaded = true
+                true
+            },
+        )
 
         CommandAPITestUtilities.assertCommandSucceeds(server.consoleSender, "uidesigner reload")
 
@@ -337,12 +392,18 @@ class UiDesignerCommandTest {
     fun `dispatch of reload is denied without permission`() {
         var reloaded = false
         val plugin = MockCommandAPIPlugin.load()
-        registeredCommand(plugin, reloadAction = { reloaded = true })
+        registeredCommand(
+            plugin,
+            reloadAction = {
+                reloaded = true
+                true
+            },
+        )
 
-        assertThrows(CommandSyntaxException::class.java) {
-            CommandAPITestUtilities.dispatchCommand(player, "uidesigner reload")
-        }
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner reload")
+
         assertFalse(reloaded)
+        assertEquals(Messages.noPermission(), player.nextComponentMessage())
     }
 
     @Test
@@ -386,6 +447,20 @@ class UiDesignerCommandTest {
         assertTrue(plainMessage().contains("save"))
     }
 
+    @Test
+    fun `tab completion lists the uidesigner subcommands`() {
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(plugin)
+
+        CommandAPITestUtilities.assertCommandSuggests(
+            player,
+            "uidesigner ",
+            "help",
+            "reload",
+            "save",
+        )
+    }
+
     private fun plainMessage(): String =
         PlainTextComponentSerializer
             .plainText()
@@ -395,7 +470,7 @@ class UiDesignerCommandTest {
         plugin: JavaPlugin,
         region: Region? = null,
         outputFile: Path = DEFAULT_OUTPUT,
-        reloadAction: () -> Unit = {},
+        reloadAction: () -> Boolean = { true },
         exporter: (List<UiChest>, Path) -> Unit = { _, _ -> },
     ) {
         UiDesignerCommand(
@@ -416,7 +491,7 @@ class UiDesignerCommandTest {
             plugin = MockBukkit.createMockPlugin(),
             selectionSource = FakeSelectionSource(region),
             configProvider = { config(outputFile) },
-            reloadAction = {},
+            reloadAction = { true },
             exporter = exporter,
         )
 

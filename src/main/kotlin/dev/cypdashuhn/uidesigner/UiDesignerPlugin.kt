@@ -43,20 +43,21 @@ open class UiDesignerPlugin : JavaPlugin() {
                 FaweSelectionSource.selectionOf(player)
         }
 
-    fun reloadConfiguration() {
+    fun reloadConfiguration(): Boolean {
         val configFile = dataFolder.resolve("config.yml")
-        val canOverwriteFile =
+        val readable =
             !configFile.isFile ||
                 runCatching { YamlConfiguration().load(configFile) }.isSuccess
 
         reloadConfig()
         val loaded = UiDesignerConfig(config, dataFolder.toPath())
-        if (canOverwriteFile) {
+        if (readable) {
             if (loaded.writeDefaultOutputIfBlank()) saveConfig()
         } else {
             logger.warning("config.yml could not be read; leaving it unchanged")
         }
         uiConfig = loaded
+        return readable
     }
 
     override fun onDisable() {
