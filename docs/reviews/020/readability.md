@@ -92,3 +92,71 @@ behaviour.
 - **Hygiene.** `git status` shows only the expected new source/test trees plus
   the `docs/data-format.md` edit — no temp files, scratch notes or stray
   artifacts.
+
+## Round 2
+
+### Verdict
+Ship with one small fix. Round-1 issues 1, 3 and 4 are resolved cleanly, and
+issue 2 is resolved the way round 1 suggested (`normalized` + a pure
+`UiRow.ordered()`). The fixes introduced one new subtlety worth addressing:
+`normalized` validates positions twice, and the discarded first call reads like
+dead code while actually being load-bearing. One minor doc/identifier drift
+remains after the rename.
+
+### Issues
+
+#### 1. `normalized` validates positions twice; the discarded call reads as dead code (severity: medium)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/export/JsonExporter.kt:36-39`
+  (helper at `:52-53`)
+- Problem: `chests.forEach { it.requiredPosition() }` throws away its result,
+  then `sortedBy { it.requiredPosition() }` calls the same function again. A
+  reader reasonably concludes the first line is redundant and may delete it —
+  but it is load-bearing: Kotlin's `sortWith` returns early for lists of size
+  ≤ 1, so `sortedBy` never invokes its selector for the single-chest case. The
+  documented "fails fast" behaviour and its test (`JsonExporterTest.kt:75-79`)
+  depend on the explicit pass. Because the reason is non-obvious, the line reads
+  as noise instead of intent, and removing it would silently change behaviour.
+- Suggested fix: fold the validation into the mapping so the selector is always
+  invoked and only called once, e.g.
+  `chests.map { it to it.requiredPosition() }.sortedBy { (_, position) -> position }`
+  then map the chests; or keep the current shape and add a one-line `why`
+  comment (allowed by the no-comments convention for exactly this case) noting
+  that `sortedBy` skips its selector for single-element lists.
+
+#### 2. `docs/architecture.md:11` still says "Json config" after the rename (severity: low)
+- Location: `docs/architecture.md:11`
+- Problem: Round 1 renamed the value to `DesignJson` and `docs/data-format.md:71`
+  names it correctly, but the architecture map still describes `UiChest.kt` as
+  `... + Json config`. The map is the first place a newcomer looks, so it should
+  use the identifier the file actually declares. The same stale identifier sits
+  in `docs/tasks/020-model-and-json.md:33` (`Json { prettyPrint = ... }`).
+- Suggested fix: change the line to
+  `UiChest / UiRow / UiSlot / BlockPos + DesignJson config`, and update the
+  ticket note if ticket docs are kept in sync.
+
+### Non-issues
+- **Round-1 issue 1 resolved.** The shadowing value is now `DesignJson`
+  (`UiChest.kt:7-11`) and every call site/import was updated
+  (`JsonExporter.kt:4,20`, `UiChestTest.kt:28`, `JsonExporterTest.kt:4,67,93,109`);
+  `docs/data-format.md:71` names it. No remaining `Json` value reference outside
+  the library import and the `Json { }` builder call.
+- **Round-1 issue 2 resolved.** `normalized` (`JsonExporter.kt:36`) replaced the
+  ambiguous `ordered`, and `UiRow.ordered()` (`:55`) is again a pure sorter, so
+  the word no longer means two things one line apart. `normalized` still both
+  sorts and drops empty rows, but that is the single place for both and the name
+  is the umbrella round 1 proposed; acceptable.
+- **Round-1 issue 3 resolved.** `docs/architecture.md:11` now lists `BlockPos`.
+- **Round-1 issue 4 resolved.** `docs/data-format.md:33` scopes the empty-slot
+  rule to the scanner and leaves row omission to the exporter.
+- **New helpers read well.** `requiredPosition` (`JsonExporter.kt:52`) and
+  `createTemp` (`:57`) have intention-revealing names; `WORLD_READABLE` (`:17`)
+  and the posix branch (`:58-61`) are self-explanatory without a comment.
+- **Test helpers.** `chest`/`slot` (`JsonExporterTest.kt:193-197`) mirror the
+  model with sensible defaults and no hidden behaviour; test names remain
+  backticked sentences and the snapshot blocks are unchanged and schema-ordered.
+- **Comments / dead code.** No comments were added; the only discarded statement
+  is the one in issue 1. Every import in all four files is used.
+- **Formatting / hygiene.** No line exceeds the 100-column limit; the
+  `DesignJson` initialiser, chain wrapping and trailing commas match the
+  disabled-trailing-comma settings; `git status` shows no scratch or temp files
+  and only the expected docs edits.

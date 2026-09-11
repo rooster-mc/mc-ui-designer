@@ -9,13 +9,12 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
-import java.nio.file.attribute.FileAttribute
 import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
 
 object JsonExporter {
-    private val WORLD_READABLE: FileAttribute<Set<PosixFilePermission>> =
-        PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-r--r--"))
+    private val WORLD_READABLE: Set<PosixFilePermission> =
+        PosixFilePermissions.fromString("rw-r--r--")
 
     fun toJson(chests: List<UiChest>): String = DesignJson.encodeToString(normalized(chests))
 
@@ -33,11 +32,11 @@ object JsonExporter {
         }
     }
 
-    private fun normalized(chests: List<UiChest>): List<UiChest> {
-        chests.forEach { it.requiredPosition() }
-        return chests
-            .sortedBy { it.requiredPosition() }
-            .map { chest ->
+    private fun normalized(chests: List<UiChest>): List<UiChest> =
+        chests
+            .map { it to it.requiredPosition() }
+            .sortedBy { (_, position) -> position }
+            .map { (chest, _) ->
                 chest.copy(
                     name = chest.name?.takeIf { it.isNotBlank() },
                     content =
@@ -47,19 +46,25 @@ object JsonExporter {
                             .filter { it.slots.isNotEmpty() },
                 )
             }
-    }
 
     private fun UiChest.requiredPosition(): BlockPos =
         requireNotNull(position) { "UiChest.position must be set before export" }
 
-    private fun UiRow.ordered(): UiRow = copy(slots = slots.sortedBy { it.slot })
+    private fun UiRow.ordered(): UiRow =
+        copy(
+            slots =
+                slots
+                    .sortedBy { it.slot }
+                    .map { it.copy(name = it.name?.takeIf { name -> name.isNotBlank() }) },
+        )
 
-    private fun createTemp(directory: Path): Path =
+    private fun createTemp(directory: Path): Path {
+        val temp = Files.createTempFile(directory, "uidesigner-export-", ".tmp")
         if (directory.fileSystem.supportedFileAttributeViews().contains("posix")) {
-            Files.createTempFile(directory, "uidesigner-export-", ".tmp", WORLD_READABLE)
-        } else {
-            Files.createTempFile(directory, "uidesigner-export-", ".tmp")
+            Files.setPosixFilePermissions(temp, WORLD_READABLE)
         }
+        return temp
+    }
 
     private fun move(temp: Path, target: Path) {
         try {

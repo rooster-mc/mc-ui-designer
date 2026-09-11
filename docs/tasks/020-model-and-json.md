@@ -30,7 +30,7 @@ schema in `docs/data-format.md`.
 - Capture from the world (later tickets).
 
 ## Notes
-- `Json { prettyPrint = true; encodeDefaults = false }` so omitted nullable
+- `DesignJson { prettyPrint = true; encodeDefaults = false }` so omitted nullable
   fields stay omitted.
 - Decide and document whether an unnamed chest serializes `"name": ""` or the
   key is absent; `docs/data-format.md` currently says `""`. Keep them in sync.

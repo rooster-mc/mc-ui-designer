@@ -18,7 +18,7 @@ used mixed casing, so it was normalised.
           {
             "slot": 1,       // 1..9, left-to-right within the row
             "item": "minecraft:stone",  // namespaced item id
-            "name": "Stone"             // custom item display name; omitted when none
+            "name": "Stone"             // custom item display name; omitted when none/blank
           }
         ]
       }
@@ -33,8 +33,9 @@ used mixed casing, so it was normalised.
 - The scanner does not emit slots with no item; a row with no items is omitted
   entirely by the exporter.
 - `name` on a chest is omitted when the chest is unnamed; `name` on a slot is
-  omitted when the item has no custom display name. A blank chest `name` (`""`
-  or whitespace-only) is treated as absent by the exporter.
+  omitted when the item has no custom display name. A blank `name` (`""` or
+  whitespace-only) is treated as absent by the exporter on both chests and
+  slots.
 - `name` on a slot is the item's custom display name (the name shown in the
   item tooltip), not the material name.
 - Chests are ordered deterministically: by the world position of their

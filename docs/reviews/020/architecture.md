@@ -117,3 +117,78 @@ it to the exporter), name `BlockPos` in `architecture.md`, and record the
   `Json.encodeToString(emptyList())` naturally yields `[]`, so no branch was
   added for it; `sortedBy` is stable, so equal positions keep input order, which
   is only a hazard if issue 2's default is relied upon.
+
+## Round 2
+
+### Verdict
+Ship. All three fix-now round-1 issues are resolved, the purity seam still
+holds, and the `requiredPosition`/`normalized` shape is the right one for
+030/040/060. The only outstanding item is the round-1 #4 deferral, which is
+unchanged and therefore correctly *not* silently altered, but the deferral is
+recorded only in this review rather than where ticket 030 will read it. That is
+a process gap, not a new architectural defect.
+
+### Issues
+
+#### 1. The 030 deferral (model purity vs `ChestContent`) is not recorded where 030 can see it (severity: low) — carry over to 030
+- Location: `docs/architecture.md:12` vs `docs/architecture.md:34-35`,
+  `docs/tasks/030-selection-capture.md:20-21`, round-1 §4 of this file
+- Problem: The round-1 item was "carry over to 030", and it is still carried:
+  `architecture.md:12` keeps `model/ChestContent.kt` ("capture-side
+  intermediate") inside the package that `architecture.md:34-35` declares
+  "pure Kotlin: no Bukkit imports", while `030-selection-capture.md:20-21`
+  explicitly allows Bukkit types in `ChestContent`. Nothing was changed here, so
+  the item was not silently dropped or silently resolved — good. But the only
+  record of the deferral is this review file; `architecture.md` and ticket 030's
+  notes still present the two lines as if consistent. When 030 starts, its
+  ticket-orchestrator has no in-repo pointer to the decision it must make.
+- Suggested fix: before 030 starts, add one line either to `architecture.md`
+  (e.g. "030 must decide whether `ChestContent` moves to `capture/` to keep
+  `model` pure") or to `030-selection-capture.md` Notes, linking back to round-1
+  §4. Same for the round-1 §3 follow-up (`BlockPos` stays in `UiChest.kt` until
+  030 adds the second consumer, then moves to `model/BlockPos.kt`): it is still
+  correctly deferred, but also only recorded here. No source change required.
+
+### Non-issues
+- **Round-1 #1 (ordering ownership) is resolved.** `architecture.md:21`
+  labels `JsonExporter` the "single ordering authority", `architecture.md:38-40`
+  states the rule explicitly ("The grouper (040) merges double chests and must
+  not re-sort"), and `architecture.md:54` now reads "(double chests merged;
+  JsonExporter owns ordering)". `data-format.md:40-43` is the single format-side
+  statement of the same rule. 040's "deterministic canonical position"
+  (`040-double-chest-grouping.md:18`) is now data, not a competing sort.
+- **Round-1 #2 (`position` invariant) is resolved and loud.**
+  `UiChest.kt:32` is `@Transient val position: BlockPos? = null`;
+  `JsonExporter.kt:37` validates every chest and `:39` sorts on
+  `requiredPosition()`, which throws `IllegalArgumentException` at `:52-53`. A
+  grouper that forgets the canonical position now fails instead of silently
+  falling back to input order, and the behaviour is pinned by
+  `JsonExporterTest.kt` ("a chest without a position fails fast ...").
+- **Round-1 #3 (`BlockPos` naming) is resolved.** `architecture.md:11` now lists
+  `UiChest / UiRow / UiSlot / BlockPos + Json config`, matching
+  `data-format.md:64`. The file stays `UiChest.kt` (single consumer) as agreed;
+  the split to `model/BlockPos.kt` remains a 030 follow-up (see issue 1).
+- **The `requiredPosition`/`normalized` seam is the right shape for the next
+  tickets.** 040 must set the canonical position on the merged `UiChest` to pass
+  `JsonExporter.normalized`, and 030's `ChestContent`/`UiChest` mapping gets the
+  same enforcement for free; the exporter needs no interface, plugin handle or
+  config, so 060 can still call `JsonExporter.export(chests, outputFile.toPath())`
+  unchanged. `normalized` is private, so the "single ordering authority" has a
+  single entry point (`toJson`, which `export` reuses at `:28`).
+- **The purity seam holds.** `UiChest.kt` imports only `kotlinx.serialization`;
+  `JsonExporter.kt` imports only `java.nio.file` and `dev...model`; no Bukkit or
+  FAWE import appears in `model`/`export`. Direction is `export → model`, no
+  cycle.
+- **No new over-generalisation.** `BlockPos` stays a minimal
+  `Comparable` value type; `WORLD_READABLE`/POSIX handling in
+  `JsonExporter.kt:17-18,57-62` is a localised file-IO concern, not a new
+  abstraction, and it does not leak into the model. No container/reader/format
+  abstraction was added for the backlog.
+- **`normalized` calling `requiredPosition()` twice (`:37` then `:39`) is
+  acceptable.** The eager `forEach` makes the fail-fast contract explicit and
+  independent of the sort implementation; the second call inside `sortedBy` is
+  idempotent. Not drift-prone, not worth a refactor.
+- **Name/blank normalisation stays single-sourced in the exporter.**
+  `JsonExporter.kt:42` (`name?.takeIf { it.isNotBlank() }`) plus
+  `data-format.md:36-37` pin "blank means absent" for 050's `/chest-edit clear`
+  to rely on; no duplicate blank handling exists elsewhere.

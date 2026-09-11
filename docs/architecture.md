@@ -8,7 +8,7 @@ uidesigner/
   config/
     UiDesignerConfig.kt      typed view over config.yml (output path, ...)
   model/
-    UiChest.kt               UiChest / UiRow / UiSlot / BlockPos + Json config
+    UiChest.kt               UiChest / UiRow / UiSlot / BlockPos + DesignJson config
     ChestContent.kt          capture-side intermediate: chest position + inventory
   capture/
     SelectionSource.kt       interface: player -> region (seam for tests)
@@ -33,6 +33,11 @@ uidesigner/
   testable with fakes.
 - **`model`** and **`export`** are pure Kotlin: no Bukkit imports. They are the
   easiest place to get coverage and the place where format correctness lives.
+- **`model` purity vs `ChestContent` is deferred to 030.** `ChestContent`
+  (capture-side intermediate) currently sits in `model`; ticket 030 must decide
+  whether it moves to `capture/` so `model` stays pure. Separately, `BlockPos`
+  may move from `UiChest.kt` to `model/BlockPos.kt` once 030 adds its second
+  consumer. Neither change is made here.
 - **`ChestScanner`** turns Bukkit `Block`/`Inventory` into the capture-side
   model (`ChestContent`), keeping Bukkit types out of grouping and export.
 - **`JsonExporter`** is the single ordering authority: it sorts chests by

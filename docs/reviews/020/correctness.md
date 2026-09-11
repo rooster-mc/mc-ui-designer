@@ -117,3 +117,136 @@ robustness gaps around empty slots, file permissions, and empty-string names.
 - **Threading.** `model`/`export` contain no Bukkit world/inventory access; the
   file IO is synchronous but caller-driven, and the ticket sets no async
   requirement.
+
+## Round 2
+
+### Verdict
+Ship. All four round-1 issues are genuinely fixed: a missing `position` now
+fails fast for every chest (including a one-element list), the temp file
+requests `rw-r--r--` on POSIX, a blank chest name normalises to null, and the
+empty-slot rule is scoped to the capture side. The exact schema, ordering,
+omission rules, atomic-write mechanics and the no-Bukkit seam all still hold.
+The only findings are two low-severity edges: the world-readable guarantee is
+umask-dependent while the new test asserts it unconditionally, and blank-name
+normalisation is applied to chest names but not slot names.
+
+### Issues
+
+#### 1. The world-readable guarantee is umask-dependent, and the new test asserts it unconditionally (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/export/JsonExporter.kt:17-18,57-62`,
+  `src/test/kotlin/dev/cypdashuhn/uidesigner/export/JsonExporterTest.kt:179-191`
+- Problem: `createTemp` passes `WORLD_READABLE` (`posix:permissions` = `rw-r--r--`)
+  to `Files.createTempFile`. In the JDK 25 source shipped in this toolchain,
+  `TempFileHelper.create` forwards that attribute to `Files.createFile`, and
+  `UnixChannelFactory.open` passes the resulting mode to `open`/`openat`. The
+  kernel applies the process umask to that mode, so the file is only
+  world-readable when the umask permits it: with the common `0022` it is `0644`,
+  but with `0077` or `0027` it is `0600` or `0640`. The new test asserts
+  `GROUP_READ` and `OTHERS_READ` with no umask assumption, so it fails in a
+  hardened environment. Round-1's actual defect (the temp file defaulting to
+  `0600` regardless of intent) is fixed for a normal umask; this is a caveat on
+  the strength of the guarantee, not a regression.
+- Reproduction: `umask 077`, then run
+  `JsonExporterTest.export writes a world-readable file where the filesystem
+  supports posix`; `Files.getPosixFilePermissions(target)` lacks `GROUP_READ`
+  and `OTHERS_READ`.
+- Suggested fix: decide whether world-readable is a hard requirement. If it is,
+  `Files.setPosixFilePermissions(target, WORLD_READABLE.value())` after the move
+  (chmod bypasses umask) on the POSIX branch; if respecting umask is intended,
+  drop the `OTHERS_READ`/`GROUP_READ` assertions or gate the test on a permissive
+  umask. Do not leave an unconditional assertion that depends on the runner's
+  umask.
+
+#### 2. Blank-name normalisation is chest-only; a blank slot `name` is still emitted (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/export/JsonExporter.kt:42`,
+  `src/main/kotlin/dev/cypdashuhn/uidesigner/model/UiChest.kt:45`,
+  `docs/data-format.md:35-37`
+- Problem: `name = chest.name?.takeIf { it.isNotBlank() }` fixes the chest-name
+  case, but slots are passed through `UiRow.ordered()` untouched, so
+  `UiSlot(slot = 1, item = "minecraft:stone", name = "")` serializes with
+  `"name": ""`. `docs/data-format.md:35` says a slot `name` is omitted when the
+  item "has no custom display name", and an empty string is not a meaningful
+  display name, so the code contradicts the general slot rule even though the
+  blank-name sentence at `:36-37` is deliberately scoped to chest names. The
+  practical risk is low (ticket 050's clear path targets chest names), but the
+  same "absence is null" invariant that round 1 established is not enforced for
+  slots, and a future item-name clear that yields `""` would leak it.
+- Reproduction: `JsonExporter.toJson(listOf(UiChest(name = "Shop", rows = 3,
+  content = listOf(UiRow(1, listOf(UiSlot(1, "minecraft:stone", "")))),
+  position = BlockPos(0, 0, 0))))` contains `"name": ""` inside the slot.
+- Suggested fix: normalise slot names the same way in `UiRow.ordered()`
+  (`copy(slots = slots.sortedBy { it.slot }.map { it.copy(name =
+  it.name?.takeIf(String::isNotBlank)) })`), or state in `docs/data-format.md`
+  that a blank slot `name` is a caller contract and must be `null`.
+
+### Non-issues
+- **Round-1 #1 (position default) is resolved and validated for every chest.**
+  `UiChest.position` is now `BlockPos? = null` (`UiChest.kt:32`) and
+  `normalized` calls `chests.forEach { it.requiredPosition() }` before sorting
+  (`JsonExporter.kt:37`). The explicit `forEach` is not redundant: `sortedBy`
+  builds a `compareBy` comparator whose selector is only invoked during
+  comparisons, so a one-element list would never call it — the `forEach` is the
+  only thing that makes the single-element case fail. The regression test
+  `a chest without a position fails fast...` (`JsonExporterTest.kt:74-79`)
+  covers exactly that one-element input and asserts `IllegalArgumentException`,
+  which `requireNotNull` throws.
+- **The round-trip test still holds.** `UiChestTest` builds a chest with the
+  default `position = null`; `@Transient` keeps it out of the JSON, decode
+  restores the null default, and data-class equality compares null to null. No
+  change to the test was needed and none is implied by the nullable model.
+- **Round-1 #2 (empty slots) is resolved by scoping the doc, matching the
+  code.** `docs/data-format.md:33-34` now says the scanner does not emit no-item
+  slots and that the exporter drops empty rows, which is exactly
+  `JsonExporter.kt:47`. The model still has no empty-slot representation
+  (`UiSlot.item` is non-null), so no code could be expected to drop one; code,
+  doc and ticket acceptance criteria agree.
+- **Round-1 #3 (permissions) is resolved in the normal case.** The POSIX branch
+  requests `rw-r--r--` (`JsonExporter.kt:57-59`), the non-POSIX branch falls
+  back to `createTempFile(dir, prefix, suffix)` with no attributes
+  (`:60-61`), and `PosixFilePermissions.fromString` needs no POSIX filesystem to
+  build, so the `WORLD_READABLE` initializer is safe everywhere. The attribute
+  is immutable and safely shared across calls. The umask caveat is issue 1.
+- **Round-1 #4 (blank chest name) is resolved and correctly scoped.**
+  `takeIf { it.isNotBlank() }` returns null for `null` (via `?.`), `""` and
+  whitespace-only names, and leaves leading/trailing whitespace on a real name
+  intact; `docs/data-format.md:36-37` documents exactly this. The test at
+  `JsonExporterTest.kt:98-112` pins whitespace-only to a null name. (A
+  non-breaking space `"\u00A0"` is not Java whitespace and is kept, which is an
+  acceptable reading of "whitespace-only".)
+- **Exact schema and key order unchanged and still pinned.** `UiChest` emits
+  `name` (when non-null), `rows`, `content`; `UiSlot` emits `slot`, `item`,
+  `name` (when non-null); `UiRow` emits `row`, `slots`. The literal snapshot
+  (`JsonExporterTest.kt:200-234`) and the escaped/unicode snapshot
+  (`:236-256`) both still match the schema in `docs/data-format.md:9-28`.
+- **Ordering is total, deterministic and documented.** `BlockPos.compareTo`
+  (`UiChest.kt:18-24`) compares x, then y, then z via `Int.compareTo` (no
+  subtraction overflow); chests sort by required position, rows by `row`, slots
+  by `slot`. The round-1 tie-break ambiguity is closed by
+  `docs/data-format.md:41-43` ("equal positions keep their input order (stable
+  sort)"), which matches `sortedBy`.
+- **Omission rules are consistent.** Empty rows are filtered after sorting
+  (`JsonExporter.kt:44-47`); `content` and `rows` have no defaults so they are
+  always emitted (an empty chest emits `"content": []`); null `name`s are
+  omitted by `encodeDefaults = false`. `emptyList()` still yields `[]`.
+- **Atomic-write mechanics are unchanged and sound.** `target.toAbsolutePath()`
+  guarantees a non-null parent for bare filenames; the temp is created in the
+  target's directory; `toJson` is evaluated before `writeString` so a missing
+  position throws before any bytes are written; the write is followed by
+  `REPLACE_EXISTING + ATOMIC_MOVE` with an `AtomicMoveNotSupportedException`
+  fallback; any throw deletes the temp and rethrows, leaving the old target
+  intact. The overwrite path is exercised by the stale-file test
+  (`JsonExporterTest.kt:134-158`).
+- **No Bukkit/FAWE imports in `model` or `export`** (grep over both trees finds
+  only `kotlinx.serialization` and `java.nio.file`), so the purity seam holds.
+- **Double-chest edge cases remain out of scope for this ticket.** The exporter
+  consumes already-merged `UiChest` values; orientations, single-half
+  selections, trapped chests and shared inventories are grouping/capture
+  concerns for later tickets.
+- **No new threading concern.** `model`/`export` still touch no Bukkit world or
+  inventory state; the file IO is synchronous and caller-driven.
+- **Ticket text drift (documentation only, no code impact).** The ticket scope
+  still says "empty slots omitted" and its note still claims
+  `docs/data-format.md` "currently says `""`"
+  (`docs/tasks/020-model-and-json.md:16,35-36`), both stale after the round-1
+  doc rewrite. The authoritative format doc and the acceptance criteria are
+  consistent with the code, so this does not affect correctness.

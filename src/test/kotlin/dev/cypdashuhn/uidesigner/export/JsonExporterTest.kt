@@ -8,14 +8,13 @@ import dev.cypdashuhn.uidesigner.model.UiSlot
 import kotlinx.serialization.decodeFromString
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.attribute.PosixFilePermission
+import java.nio.file.attribute.PosixFilePermissions
 
 class JsonExporterTest {
     @Test
@@ -112,6 +111,29 @@ class JsonExporterTest {
     }
 
     @Test
+    fun `a blank slot name is treated as unnamed`() {
+        val chests =
+            listOf(
+                chest(
+                    "Shop",
+                    BlockPos(0, 0, 0),
+                    UiRow(row = 1, slots = listOf(slot(1, "minecraft:stone", "   ")))
+                )
+            )
+
+        val decoded =
+            DesignJson
+                .decodeFromString<List<UiChest>>(JsonExporter.toJson(chests))
+                .single()
+                .content
+                .single()
+                .slots
+                .single()
+
+        assertNull(decoded.name)
+    }
+
+    @Test
     fun `quotes, backslashes and unicode are escaped in the output`() {
         val special = "Café \"Special\" \\"
         val chests =
@@ -185,9 +207,27 @@ class JsonExporterTest {
 
         JsonExporter.export(listOf(chest("Shop", BlockPos(0, 0, 0))), target)
 
-        val permissions = Files.getPosixFilePermissions(target)
-        assertTrue(permissions.contains(PosixFilePermission.GROUP_READ))
-        assertTrue(permissions.contains(PosixFilePermission.OTHERS_READ))
+        assertEquals(
+            PosixFilePermissions.fromString("rw-r--r--"),
+            Files.getPosixFilePermissions(target)
+        )
+    }
+
+    @Test
+    fun `a failed export deletes the temporary file`(
+        @TempDir directory: Path
+    ) {
+        val target = directory.resolve("design.json")
+        val chests = listOf(UiChest(name = "Shop", rows = 3, content = emptyList()))
+
+        assertThrows<IllegalArgumentException> { JsonExporter.export(chests, target) }
+
+        Files.list(directory).use { stream ->
+            assertEquals(
+                emptyList<String>(),
+                stream.map { it.fileName.toString() }.sorted().toList()
+            )
+        }
     }
 
     private fun chest(name: String?, position: BlockPos, vararg content: UiRow) =
