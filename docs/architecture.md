@@ -8,7 +8,7 @@ uidesigner/
   config/
     UiDesignerConfig.kt      typed view over config.yml (output path, ...)
   model/
-    UiChest.kt               UiChest / UiRow / UiSlot + Json config
+    UiChest.kt               UiChest / UiRow / UiSlot / BlockPos + Json config
     ChestContent.kt          capture-side intermediate: chest position + inventory
   capture/
     SelectionSource.kt       interface: player -> region (seam for tests)
@@ -18,7 +18,7 @@ uidesigner/
   naming/
     ChestNamer.kt            read/write the name of a chest block
   export/
-    JsonExporter.kt          model -> JSON string/file (atomic write)
+    JsonExporter.kt          model -> JSON string/file (atomic write; single ordering authority)
   commands/
     UiDesignerCommand.kt     /uidesigner save | reload | help
     ChestEditCommand.kt      /chest-edit <name> | clear
@@ -35,6 +35,9 @@ uidesigner/
   easiest place to get coverage and the place where format correctness lives.
 - **`ChestScanner`** turns Bukkit `Block`/`Inventory` into the capture-side
   model (`ChestContent`), keeping Bukkit types out of grouping and export.
+- **`JsonExporter`** is the single ordering authority: it sorts chests by
+  canonical position and rows/slots by index. The grouper (040) merges double
+  chests and must not re-sort; the exporter normalises order.
 
 ## Data flow
 
@@ -48,7 +51,7 @@ player + FAWE selection
  List<ChestContent>          (one per chest *block*, double halves separate)
         │  DoubleChestGrouper
         ▼
- List<UiChest>               (double chests merged, ordered)
+ List<UiChest>               (double chests merged; JsonExporter owns ordering)
         │  JsonExporter
         ▼
         JSON file (config.outputFile)
