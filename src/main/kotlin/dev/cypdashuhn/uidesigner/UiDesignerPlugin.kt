@@ -5,6 +5,7 @@ import dev.cypdashuhn.uidesigner.capture.Region
 import dev.cypdashuhn.uidesigner.capture.SelectionSource
 import dev.cypdashuhn.uidesigner.commands.ChestEditCommand
 import dev.cypdashuhn.uidesigner.commands.UiDesignerCommand
+import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.jorel.commandapi.CommandAPI
 import dev.jorel.commandapi.CommandAPIPaperConfig
@@ -43,7 +44,7 @@ open class UiDesignerPlugin : JavaPlugin() {
                 FaweSelectionSource.selectionOf(player)
         }
 
-    fun reloadConfiguration(): Boolean {
+    fun reloadConfiguration(): ReloadResult {
         val configFile = dataFolder.resolve("config.yml")
         val readable =
             !configFile.isFile ||
@@ -51,13 +52,26 @@ open class UiDesignerPlugin : JavaPlugin() {
 
         reloadConfig()
         val loaded = UiDesignerConfig(config, dataFolder.toPath())
-        if (readable) {
-            if (loaded.writeDefaultOutputIfBlank()) saveConfig()
-        } else {
-            logger.warning("config.yml could not be read; leaving it unchanged")
-        }
+        val result =
+            when {
+                !readable -> {
+                    logger.warning("config.yml could not be read; leaving it unchanged")
+                    ReloadResult.UsingDefaults
+                }
+                loaded.hasUnusableOutputFile() -> {
+                    logger.warning(
+                        "${UiDesignerConfig.OUTPUT_FILE_KEY} is not a valid path; " +
+                            "leaving it unchanged",
+                    )
+                    ReloadResult.InvalidOutput
+                }
+                else -> {
+                    if (loaded.writeDefaultOutputIfBlank()) saveConfig()
+                    ReloadResult.Reloaded
+                }
+            }
         uiConfig = loaded
-        return readable
+        return result
     }
 
     override fun onDisable() {

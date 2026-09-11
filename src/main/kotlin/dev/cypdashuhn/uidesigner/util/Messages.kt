@@ -15,8 +15,9 @@ object Messages {
 
     private const val HELP_TEXT =
         "UiDesigner commands:\n" +
-            "/uidesigner save - export the selected chest designs to JSON.\n" +
-            "/uidesigner reload - reload config.yml.\n" +
+            "/uidesigner save (op) - export the selected chest designs to JSON.\n" +
+            "/uidesigner reload (op) - reload config.yml.\n" +
+            "/chest-edit <name> (op) - name or clear the chest you are looking at.\n" +
             "/uidesigner help - show this help."
 
     fun help(): Component = styled(infoColor, HELP_TEXT)
@@ -41,8 +42,17 @@ object Messages {
 
     fun writeFailed(outputFile: Path?, reason: String): Component {
         val target = outputFile?.let { " to $it" } ?: ""
-        return styled(errorColor, "Could not write the export$target: ${sentence(reason)}")
+        return styled(
+            errorColor,
+            "Could not write the export$target: ${withTrailingPeriod(reason)}",
+        )
     }
+
+    fun invalidOutputFile(reason: String): Component =
+        styled(
+            errorColor,
+            "The configured output path is not usable: ${withTrailingPeriod(reason)}",
+        )
 
     fun reloadSuccess(outputFile: Path): Component =
         styled(successColor, "Reloaded config.yml. Output file: $outputFile.")
@@ -53,15 +63,27 @@ object Messages {
             "config.yml could not be read; using defaults. Output file: $outputFile.",
         )
 
+    fun reloadInvalidOutput(outputFile: Path): Component =
+        styled(
+            infoColor,
+            "output-file in config.yml is not a valid path; using defaults. " +
+                "Output file: $outputFile.",
+        )
+
     fun reloadFailed(reason: String): Component =
-        styled(errorColor, "Could not reload config.yml: ${sentence(reason)}")
+        styled(errorColor, "Could not reload config.yml: ${withTrailingPeriod(reason)}")
 
     fun chestEditNamed(name: String): Component =
         styled(successColor, "Named this chest \"$name\".")
 
     fun chestEditCleared(): Component = styled(successColor, "Cleared this chest's name.")
 
-    fun chestEditNotAChest(): Component = styled(errorColor, "Look at a chest to name it.")
+    fun chestEditNothingToClear(): Component = styled(infoColor, "This chest has no name.")
+
+    fun chestEditNoTarget(): Component =
+        styled(errorColor, "Not looking at a chest (or it is out of reach).")
+
+    fun chestEditNotAChest(): Component = styled(errorColor, "That block is not a chest.")
 
     fun chestEditUsage(): Component =
         styled(
@@ -70,8 +92,8 @@ object Messages {
                 "or /chest-edit clear to remove the name.",
         )
 
-    fun noPermission(): Component =
-        styled(errorColor, "You do not have permission to use this command.")
+    fun noPermission(node: String): Component =
+        styled(errorColor, "You do not have permission to use this command ($node).")
 
     private fun styled(color: TextColor, body: String): Component =
         styled(color, Component.text(body))
@@ -84,5 +106,5 @@ object Messages {
             .append(body)
             .build()
 
-    private fun sentence(text: String): String = text.trim().trimEnd('.') + "."
+    private fun withTrailingPeriod(text: String): String = text.trim().trimEnd('.') + "."
 }

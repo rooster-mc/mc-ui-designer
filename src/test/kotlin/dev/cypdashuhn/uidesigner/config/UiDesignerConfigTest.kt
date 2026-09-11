@@ -83,13 +83,36 @@ class UiDesignerConfigTest {
     }
 
     @Test
-    fun `non-string key is written back from the default`() {
+    fun `non-string key is not overwritten`() {
         val config = config()
         config.set(UiDesignerConfig.OUTPUT_FILE_KEY, listOf("design.json"))
         val subject = UiDesignerConfig(config, dataFolder)
 
-        assertTrue(subject.writeDefaultOutputIfBlank())
-        assertEquals("design.json", config.getString(UiDesignerConfig.OUTPUT_FILE_KEY))
+        assertFalse(subject.writeDefaultOutputIfBlank())
+        assertEquals(
+            listOf("design.json"),
+            config.get(UiDesignerConfig.OUTPUT_FILE_KEY),
+        )
+    }
+
+    @Test
+    fun `non-string key is reported as unusable`() {
+        val config = config()
+        config.set(UiDesignerConfig.OUTPUT_FILE_KEY, listOf("design.json"))
+
+        assertTrue(UiDesignerConfig(config, dataFolder).hasUnusableOutputFile())
+    }
+
+    @Test
+    fun `absent blank and string keys are not reported as unusable`() {
+        assertFalse(UiDesignerConfig(config(), dataFolder).hasUnusableOutputFile())
+        assertFalse(
+            UiDesignerConfig(config(outputFile = "   "), dataFolder).hasUnusableOutputFile(),
+        )
+        assertFalse(
+            UiDesignerConfig(config(outputFile = "custom.json"), dataFolder)
+                .hasUnusableOutputFile(),
+        )
     }
 
     @Test

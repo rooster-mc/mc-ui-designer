@@ -2,6 +2,7 @@ package dev.cypdashuhn.uidesigner.commands
 
 import dev.cypdashuhn.uidesigner.capture.Region
 import dev.cypdashuhn.uidesigner.capture.SelectionSource
+import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.cypdashuhn.uidesigner.export.JsonExporter
 import dev.cypdashuhn.uidesigner.model.BlockPos
@@ -210,13 +211,32 @@ class UiDesignerCommandTest {
                 plugin = MockBukkit.createMockPlugin(),
                 selectionSource = FakeSelectionSource(region(0, 0, 0, 0, 0, 0)),
                 configProvider = { throw IllegalStateException("missing default output") },
-                reloadAction = { true },
+                reloadAction = { ReloadResult.Reloaded },
             )
 
         val outcome = command.save(player)
 
         assertEquals(
-            UiDesignerCommand.SaveOutcome.WriteFailed(null, "missing default output"),
+            UiDesignerCommand.SaveOutcome.InvalidOutputFile("missing default output"),
+            outcome,
+        )
+    }
+
+    @Test
+    fun `save reports an unusable config path with a fallback hint`() {
+        blockAt(Material.CHEST, 0, 0, 0)
+        val command =
+            UiDesignerCommand(
+                plugin = MockBukkit.createMockPlugin(),
+                selectionSource = FakeSelectionSource(region(0, 0, 0, 0, 0, 0)),
+                configProvider = { throw IllegalStateException() },
+                reloadAction = { ReloadResult.Reloaded },
+            )
+
+        val outcome = command.save(player)
+
+        assertEquals(
+            UiDesignerCommand.SaveOutcome.InvalidOutputFile("check the output-file setting"),
             outcome,
         )
     }
@@ -236,7 +256,7 @@ class UiDesignerCommandTest {
                 reloadAction = {
                     reloaded = true
                     current = after
-                    true
+                    ReloadResult.Reloaded
                 },
             )
 
@@ -253,11 +273,27 @@ class UiDesignerCommandTest {
                 plugin = MockBukkit.createMockPlugin(),
                 selectionSource = FakeSelectionSource(null),
                 configProvider = { config(DEFAULT_OUTPUT) },
-                reloadAction = { false },
+                reloadAction = { ReloadResult.UsingDefaults },
             )
 
         assertEquals(
             UiDesignerCommand.ReloadOutcome.UsingDefaults(DEFAULT_OUTPUT),
+            command.reload(),
+        )
+    }
+
+    @Test
+    fun `reload reports an invalid output file`() {
+        val command =
+            UiDesignerCommand(
+                plugin = MockBukkit.createMockPlugin(),
+                selectionSource = FakeSelectionSource(null),
+                configProvider = { config(DEFAULT_OUTPUT) },
+                reloadAction = { ReloadResult.InvalidOutput },
+            )
+
+        assertEquals(
+            UiDesignerCommand.ReloadOutcome.InvalidOutput(DEFAULT_OUTPUT),
             command.reload(),
         )
     }
@@ -306,7 +342,10 @@ class UiDesignerCommandTest {
         CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
 
         assertFalse(exported)
-        assertEquals(Messages.noPermission(), player.nextComponentMessage())
+        assertEquals(
+            Messages.noPermission(UiDesignerCommand.SAVE_PERMISSION),
+            player.nextComponentMessage(),
+        )
     }
 
     @Test
@@ -327,6 +366,25 @@ class UiDesignerCommandTest {
     }
 
     @Test
+    fun `dispatch of save reports an unusable output path`() {
+        blockAt(Material.CHEST, 0, 0, 0)
+        val plugin = MockCommandAPIPlugin.load()
+        UiDesignerCommand(
+            plugin = plugin,
+            selectionSource = FakeSelectionSource(region(0, 0, 0, 0, 0, 0)),
+            configProvider = { throw IllegalStateException("missing default output") },
+            reloadAction = { ReloadResult.Reloaded },
+        ).register()
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
+
+        val message = plainMessage()
+        assertTrue(message.contains("configured output path"))
+        assertTrue(message.contains("missing default output"))
+    }
+
+    @Test
     fun `dispatch of reload runs the reload for an op`() {
         var reloaded = false
         val plugin = MockCommandAPIPlugin.load()
@@ -334,7 +392,7 @@ class UiDesignerCommandTest {
             plugin,
             reloadAction = {
                 reloaded = true
-                true
+                ReloadResult.Reloaded
             },
         )
         player.isOp = true
@@ -360,7 +418,7 @@ class UiDesignerCommandTest {
     @Test
     fun `dispatch of reload reports defaults when the config could not be read`() {
         val plugin = MockCommandAPIPlugin.load()
-        registeredCommand(plugin, reloadAction = { false })
+        registeredCommand(plugin, reloadAction = { ReloadResult.UsingDefaults })
         player.isOp = true
 
         CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner reload")
@@ -372,6 +430,20 @@ class UiDesignerCommandTest {
     }
 
     @Test
+    fun `dispatch of reload warns when output-file is invalid`() {
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(plugin, reloadAction = { ReloadResult.InvalidOutput })
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner reload")
+
+        val message = plainMessage()
+        assertTrue(message.contains("output-file"))
+        assertTrue(message.contains("not a valid path"))
+        assertTrue(message.contains(DEFAULT_OUTPUT.toString()))
+    }
+
+    @Test
     fun `console can reload`() {
         var reloaded = false
         val plugin = MockCommandAPIPlugin.load()
@@ -379,7 +451,7 @@ class UiDesignerCommandTest {
             plugin,
             reloadAction = {
                 reloaded = true
-                true
+                ReloadResult.Reloaded
             },
         )
 
@@ -396,14 +468,17 @@ class UiDesignerCommandTest {
             plugin,
             reloadAction = {
                 reloaded = true
-                true
+                ReloadResult.Reloaded
             },
         )
 
         CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner reload")
 
         assertFalse(reloaded)
-        assertEquals(Messages.noPermission(), player.nextComponentMessage())
+        assertEquals(
+            Messages.noPermission(UiDesignerCommand.RELOAD_PERMISSION),
+            player.nextComponentMessage(),
+        )
     }
 
     @Test
@@ -417,6 +492,8 @@ class UiDesignerCommandTest {
         assertTrue(message.contains("save"))
         assertTrue(message.contains("reload"))
         assertTrue(message.contains("help"))
+        assertTrue(message.contains("chest-edit"))
+        assertTrue(message.contains("(op)"))
     }
 
     @Test
@@ -470,7 +547,7 @@ class UiDesignerCommandTest {
         plugin: JavaPlugin,
         region: Region? = null,
         outputFile: Path = DEFAULT_OUTPUT,
-        reloadAction: () -> Boolean = { true },
+        reloadAction: () -> ReloadResult = { ReloadResult.Reloaded },
         exporter: (List<UiChest>, Path) -> Unit = { _, _ -> },
     ) {
         UiDesignerCommand(
@@ -491,7 +568,7 @@ class UiDesignerCommandTest {
             plugin = MockBukkit.createMockPlugin(),
             selectionSource = FakeSelectionSource(region),
             configProvider = { config(outputFile) },
-            reloadAction = { true },
+            reloadAction = { ReloadResult.Reloaded },
             exporter = exporter,
         )
 

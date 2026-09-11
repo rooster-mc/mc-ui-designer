@@ -10,7 +10,11 @@ class UiDesignerConfig(
     val outputFile: Path
         get() = resolve(explicitOutputFile() ?: defaultOutputFile())
 
+    fun hasUnusableOutputFile(): Boolean =
+        config.isSet(OUTPUT_FILE_KEY) && config.get(OUTPUT_FILE_KEY) !is String
+
     fun writeDefaultOutputIfBlank(): Boolean {
+        if (hasUnusableOutputFile()) return false
         if (explicitOutputFile() != null) return false
         config.set(OUTPUT_FILE_KEY, defaultOutputFile())
         return true

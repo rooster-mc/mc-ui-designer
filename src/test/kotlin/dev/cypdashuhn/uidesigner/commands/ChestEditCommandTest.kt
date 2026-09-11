@@ -87,7 +87,36 @@ class ChestEditCommandTest {
     fun `apply rejects a null target`() {
         val outcome = command().apply(null, "Shop")
 
-        assertEquals(ChestEditCommand.Outcome.NotAChest, outcome)
+        assertEquals(ChestEditCommand.Outcome.NoTarget, outcome)
+    }
+
+    @Test
+    fun `apply reports nothing to clear on an unnamed chest`() {
+        val chest = blockAt(Material.CHEST)
+
+        assertEquals(ChestEditCommand.Outcome.NothingToClear, command().apply(chest, "clear"))
+        assertEquals(ChestEditCommand.Outcome.NothingToClear, command().apply(chest, "   "))
+    }
+
+    @Test
+    fun `apply trims a whitespace-padded clear sentinel`() {
+        val chest = blockAt(Material.CHEST)
+        ChestNamer.setName(chest, "Shop")
+
+        val outcome = command().apply(chest, "  clear  ")
+
+        assertEquals(ChestEditCommand.Outcome.Cleared, outcome)
+        assertNull(ChestNamer.nameOf(chest))
+    }
+
+    @Test
+    fun `apply trims a whitespace-padded name`() {
+        val chest = blockAt(Material.CHEST)
+
+        val outcome = command().apply(chest, "  Shop  ")
+
+        assertEquals(ChestEditCommand.Outcome.Named("Shop"), outcome)
+        assertEquals("Shop", ChestNamer.nameOf(chest))
     }
 
     @Test
@@ -111,6 +140,19 @@ class ChestEditCommandTest {
         val player = opPlayer()
 
         CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit clear")
+
+        assertNull(ChestNamer.nameOf(chest))
+    }
+
+    @Test
+    fun `command dispatch clears a whitespace-padded sentinel`() {
+        val chest = blockAt(Material.CHEST)
+        ChestNamer.setName(chest, "Shop")
+        val plugin = MockCommandAPIPlugin.load()
+        ChestEditCommand(plugin) { chest }.register()
+        val player = opPlayer()
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit  clear ")
 
         assertNull(ChestNamer.nameOf(chest))
     }
@@ -140,7 +182,10 @@ class ChestEditCommandTest {
         CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit Shop")
 
         assertNull(ChestNamer.nameOf(chest))
-        assertEquals(Messages.noPermission(), player.nextComponentMessage())
+        assertEquals(
+            Messages.noPermission(ChestEditCommand.PERMISSION),
+            player.nextComponentMessage(),
+        )
     }
 
     @Test

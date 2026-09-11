@@ -4,6 +4,7 @@ import dev.cypdashuhn.uidesigner.capture.ChestCapture
 import dev.cypdashuhn.uidesigner.capture.DoubleChestGrouper
 import dev.cypdashuhn.uidesigner.capture.Region
 import dev.cypdashuhn.uidesigner.capture.SelectionSource
+import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.cypdashuhn.uidesigner.export.JsonExporter
 import dev.cypdashuhn.uidesigner.model.BlockPos
@@ -18,11 +19,15 @@ import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import java.nio.file.Path
 
+private const val WRITE_FAILURE_HINT = "check that the output folder exists and is writable"
+private const val RELOAD_FAILURE_HINT = "check config.yml and the server log"
+private const val INVALID_OUTPUT_HINT = "check the output-file setting"
+
 class UiDesignerCommand(
     private val plugin: JavaPlugin,
     private val selectionSource: SelectionSource,
     private val configProvider: () -> UiDesignerConfig,
-    private val reloadAction: () -> Boolean,
+    private val reloadAction: () -> ReloadResult,
     private val exporter: (List<UiChest>, Path) -> Unit = JsonExporter::export,
 ) {
     sealed interface SaveOutcome {
@@ -39,6 +44,10 @@ class UiDesignerCommand(
             val outputFile: Path?,
             val reason: String,
         ) : SaveOutcome
+
+        data class InvalidOutputFile(
+            val reason: String,
+        ) : SaveOutcome
     }
 
     sealed interface ReloadOutcome {
@@ -47,6 +56,10 @@ class UiDesignerCommand(
         ) : ReloadOutcome
 
         data class UsingDefaults(
+            val outputFile: Path,
+        ) : ReloadOutcome
+
+        data class InvalidOutput(
             val outputFile: Path,
         ) : ReloadOutcome
 
@@ -59,7 +72,7 @@ class UiDesignerCommand(
         val reloadExecutor =
             CommandExecutor { sender, _ ->
                 if (!sender.hasPermission(RELOAD_PERMISSION)) {
-                    sender.sendMessage(Messages.noPermission())
+                    sender.sendMessage(Messages.noPermission(RELOAD_PERMISSION))
                 } else {
                     sender.sendMessage(reloadMessage(reload()))
                 }
@@ -72,7 +85,7 @@ class UiDesignerCommand(
                     .executesPlayer(
                         PlayerCommandExecutor { player, _ ->
                             if (!player.hasPermission(SAVE_PERMISSION)) {
-                                player.sendMessage(Messages.noPermission())
+                                player.sendMessage(Messages.noPermission(SAVE_PERMISSION))
                             } else {
                                 player.sendMessage(saveMessage(save(player)))
                             }
@@ -101,7 +114,7 @@ class UiDesignerCommand(
             try {
                 configProvider().outputFile
             } catch (e: Exception) {
-                return failure(e)
+                return SaveOutcome.InvalidOutputFile(e.message ?: INVALID_OUTPUT_HINT)
             }
         return try {
             exporter(named, outputFile)
@@ -112,20 +125,20 @@ class UiDesignerCommand(
     }
 
     fun reload(): ReloadOutcome =
-        runCatching {
-            val readable = reloadAction()
+        try {
+            val result = reloadAction()
             val outputFile = configProvider().outputFile
-            if (readable) {
-                ReloadOutcome.Reloaded(outputFile)
-            } else {
-                ReloadOutcome.UsingDefaults(outputFile)
+            when (result) {
+                ReloadResult.Reloaded -> ReloadOutcome.Reloaded(outputFile)
+                ReloadResult.UsingDefaults -> ReloadOutcome.UsingDefaults(outputFile)
+                ReloadResult.InvalidOutput -> ReloadOutcome.InvalidOutput(outputFile)
             }
-        }.getOrElse { e ->
-            ReloadOutcome.Failed(e.message ?: e.javaClass.simpleName)
+        } catch (e: Exception) {
+            ReloadOutcome.Failed(e.message ?: RELOAD_FAILURE_HINT)
         }
 
-    private fun failure(e: Exception, outputFile: Path? = null): SaveOutcome.WriteFailed =
-        SaveOutcome.WriteFailed(outputFile, e.message ?: e.javaClass.simpleName)
+    private fun failure(e: Exception, outputFile: Path?): SaveOutcome.WriteFailed =
+        SaveOutcome.WriteFailed(outputFile, e.message ?: WRITE_FAILURE_HINT)
 
     private fun nameAt(region: Region, position: BlockPos): String? =
         ChestNamer.nameOf(region.blockAt(position))
@@ -136,12 +149,14 @@ class UiDesignerCommand(
             SaveOutcome.NoSelection -> Messages.noSelection()
             SaveOutcome.NoChests -> Messages.noChests()
             is SaveOutcome.WriteFailed -> Messages.writeFailed(outcome.outputFile, outcome.reason)
+            is SaveOutcome.InvalidOutputFile -> Messages.invalidOutputFile(outcome.reason)
         }
 
     private fun reloadMessage(outcome: ReloadOutcome): Component =
         when (outcome) {
             is ReloadOutcome.Reloaded -> Messages.reloadSuccess(outcome.outputFile)
             is ReloadOutcome.UsingDefaults -> Messages.reloadUsingDefaults(outcome.outputFile)
+            is ReloadOutcome.InvalidOutput -> Messages.reloadInvalidOutput(outcome.outputFile)
             is ReloadOutcome.Failed -> Messages.reloadFailed(outcome.reason)
         }
 

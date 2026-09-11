@@ -82,10 +82,11 @@ Out of scope (backlog):
   `nameOf` reads the first named half. If one half is in an unloaded chunk,
   Bukkit does not report a `DoubleChest`, so `/chest-edit` only names or clears
   the loaded half; 040 and the exporter likewise only see loaded halves.
-  `/chest-edit clear` (case-insensitive) is
+  `/chest-edit clear` (case-insensitive, surrounding whitespace trimmed) is
   reserved for removal and blank input also clears, so a literal name "clear"
-  is unreachable. Bare `/chest-edit` prints a usage line instead of touching the
-  targeted block. For an unlinked geometry-merged double (no `DoubleChest`
+  is unreachable. Clearing an already-unnamed chest reports that there is
+  nothing to clear. Bare `/chest-edit` prints a usage line instead of touching
+  the targeted block. For an unlinked geometry-merged double (no `DoubleChest`
   holder), `nameOf` sees only the canonical half, so a name on the other half
   is not exported; carrying both merged positions out of the grouper is
   deferred.

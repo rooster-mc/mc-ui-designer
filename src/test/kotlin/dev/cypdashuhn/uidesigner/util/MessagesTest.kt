@@ -52,17 +52,28 @@ class MessagesTest {
         assertEquals(NamedTextColor.RED, Messages.noSelection().color())
         assertEquals(NamedTextColor.RED, Messages.noChests().color())
         assertEquals(NamedTextColor.RED, Messages.writeFailed(path, "disk full").color())
+        assertEquals(NamedTextColor.RED, Messages.invalidOutputFile("bad path").color())
         assertEquals(NamedTextColor.RED, Messages.reloadFailed("bad config").color())
+        assertEquals(NamedTextColor.RED, Messages.chestEditNoTarget().color())
         assertEquals(NamedTextColor.RED, Messages.chestEditNotAChest().color())
-        assertEquals(NamedTextColor.RED, Messages.noPermission().color())
+        assertEquals(NamedTextColor.RED, Messages.noPermission("uidesigner.save").color())
     }
 
     @Test
-    fun `help lists the subcommands`() {
+    fun `warnings are yellow`() {
+        assertEquals(NamedTextColor.YELLOW, Messages.reloadUsingDefaults(path).color())
+        assertEquals(NamedTextColor.YELLOW, Messages.reloadInvalidOutput(path).color())
+        assertEquals(NamedTextColor.YELLOW, Messages.chestEditNothingToClear().color())
+    }
+
+    @Test
+    fun `help lists the subcommands and the op-only marker`() {
         val text = plain(Messages.help())
         assertTrue(text.contains("save"))
         assertTrue(text.contains("reload"))
         assertTrue(text.contains("help"))
+        assertTrue(text.contains("chest-edit"))
+        assertTrue(text.contains("(op)"))
     }
 
     @Test
@@ -79,8 +90,10 @@ class MessagesTest {
     }
 
     @Test
-    fun `no permission is an actionable denial`() {
-        assertTrue(plain(Messages.noPermission()).contains("permission"))
+    fun `no permission names the required node`() {
+        val text = plain(Messages.noPermission("uidesigner.save"))
+        assertTrue(text.contains("permission"))
+        assertTrue(text.contains("uidesigner.save"))
     }
 
     @Test
@@ -89,6 +102,36 @@ class MessagesTest {
         assertTrue(text.contains("could not be read"))
         assertTrue(text.contains("defaults"))
         assertTrue(text.contains(path.toString()))
+    }
+
+    @Test
+    fun `reload invalid output names the key and the path`() {
+        val text = plain(Messages.reloadInvalidOutput(path))
+        assertTrue(text.contains("output-file"))
+        assertTrue(text.contains("not a valid path"))
+        assertTrue(text.contains("defaults"))
+        assertTrue(text.contains(path.toString()))
+    }
+
+    @Test
+    fun `invalid output file reports the reason`() {
+        val text = plain(Messages.invalidOutputFile("check the output-file setting"))
+        assertTrue(text.contains("configured output path"))
+        assertTrue(text.contains("check the output-file setting"))
+    }
+
+    @Test
+    fun `chest edit failure wording distinguishes no target from a non-chest`() {
+        val noTarget = plain(Messages.chestEditNoTarget())
+        val notAChest = plain(Messages.chestEditNotAChest())
+        assertTrue(noTarget.contains("out of reach"))
+        assertTrue(notAChest.contains("not a chest"))
+        assertTrue(noTarget != notAChest)
+    }
+
+    @Test
+    fun `chest edit nothing to clear is a distinct warning`() {
+        assertTrue(plain(Messages.chestEditNothingToClear()).contains("no name"))
     }
 
     @Test
@@ -107,14 +150,18 @@ class MessagesTest {
             "noChests" to Messages.noChests(),
             "writeFailed" to Messages.writeFailed(path, "disk full"),
             "writeFailedWithoutPath" to Messages.writeFailed(null, "disk full"),
+            "invalidOutputFile" to Messages.invalidOutputFile("bad path"),
             "reloadSuccess" to Messages.reloadSuccess(path),
             "reloadUsingDefaults" to Messages.reloadUsingDefaults(path),
+            "reloadInvalidOutput" to Messages.reloadInvalidOutput(path),
             "reloadFailed" to Messages.reloadFailed("bad config"),
             "chestEditNamed" to Messages.chestEditNamed("Shop"),
             "chestEditCleared" to Messages.chestEditCleared(),
+            "chestEditNothingToClear" to Messages.chestEditNothingToClear(),
+            "chestEditNoTarget" to Messages.chestEditNoTarget(),
             "chestEditNotAChest" to Messages.chestEditNotAChest(),
             "chestEditUsage" to Messages.chestEditUsage(),
-            "noPermission" to Messages.noPermission(),
+            "noPermission" to Messages.noPermission("uidesigner.save"),
         )
 
     private fun plain(message: Component): String =

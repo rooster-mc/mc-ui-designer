@@ -7,6 +7,7 @@ uidesigner/
   UiDesignerPlugin.kt        plugin entry point; wires config, commands, services
   config/
     UiDesignerConfig.kt      typed view over config.yml (output path, ...)
+    ReloadResult.kt          reloadConfiguration outcome (reloaded/defaults/invalid)
   model/
     BlockPos.kt              pure position value type + canonical ordering
     UiChest.kt               UiChest / UiRow / UiSlot + DesignJson config
@@ -24,7 +25,7 @@ uidesigner/
     JsonExporter.kt          model -> JSON string/file (atomic write; single ordering authority)
   commands/
     UiDesignerCommand.kt     /uidesigner save | reload | help
-    ChestEditCommand.kt      /chest-edit <name> | clear
+    ChestEditCommand.kt      /chest-edit <name> | clear (uidesigner.chest-edit)
   util/
     Messages.kt              Adventure components / prefixes
 ```
@@ -114,16 +115,20 @@ uidesigner/
   `SelectionSource`, a `() -> UiDesignerConfig` provider, a reload action, and
   an exporter function so the pipeline is unit-testable without CommandAPI
   dispatch. `save` runs on the CommandAPI player executor (main thread); file
-  IO stays synchronous for the MVP. `save` requires `uidesigner.save` and
-  `reload` requires `uidesigner.reload`, both defaulting to op; `help` and the
-  bare root need no permission. The nodes are declared in `build.gradle.kts`
+  IO stays synchronous for the MVP. `save` requires `uidesigner.save`, `reload`
+  requires `uidesigner.reload`, and `/chest-edit` requires
+  `uidesigner.chest-edit`, all defaulting to op; `help` and the bare root need
+  no permission. The nodes are declared in `build.gradle.kts`
   and checked inside each executor, so a missing permission sends
-  `Messages.noPermission()` rather than failing at parse time; `Messages` owns
+  `Messages.noPermission(node)` rather than failing at parse time; `Messages`
+  owns
   every player-facing component (prefix, colour, wording). `reload`, `help`,
   and the root accept any sender (console included); only `save` is
   player-only. CommandAPI suggests the registered subcommand literals
   automatically, and `/chest-edit` adds a `clear` suggestion for its optional
-  name argument.
+  name argument. `reloadConfiguration()` returns a `ReloadResult`, which
+  `UiDesignerCommand` maps to its `ReloadOutcome` (reloaded, defaults, invalid
+  output, or failed).
 - **`JsonExporter`** is the single ordering authority: it sorts chests by
   canonical position and rows/slots by index. The grouper (040) merges double
   chests and must not re-sort; the exporter normalises order.

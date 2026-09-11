@@ -24,6 +24,10 @@ class ChestEditCommand(
 
         data object Cleared : Outcome
 
+        data object NothingToClear : Outcome
+
+        data object NoTarget : Outcome
+
         data object NotAChest : Outcome
     }
 
@@ -37,7 +41,7 @@ class ChestEditCommand(
                 PlayerCommandExecutor { player, args ->
                     when {
                         !player.hasPermission(PERMISSION) ->
-                            player.sendMessage(Messages.noPermission())
+                            player.sendMessage(Messages.noPermission(PERMISSION))
                         args["name"] == null ->
                             player.sendMessage(Messages.chestEditUsage())
                         else -> {
@@ -46,6 +50,9 @@ class ChestEditCommand(
                                 is Outcome.Named ->
                                     player.sendMessage(Messages.chestEditNamed(outcome.name))
                                 Outcome.Cleared -> player.sendMessage(Messages.chestEditCleared())
+                                Outcome.NothingToClear ->
+                                    player.sendMessage(Messages.chestEditNothingToClear())
+                                Outcome.NoTarget -> player.sendMessage(Messages.chestEditNoTarget())
                                 Outcome.NotAChest ->
                                     player.sendMessage(Messages.chestEditNotAChest())
                             }
@@ -58,15 +65,19 @@ class ChestEditCommand(
     // CommandAPI flattens subcommands after a parent argument, so `/chest-edit clear`
     // cannot be a subcommand; "clear" is reserved case-insensitively as a sentinel
     // name instead, which makes a literal name "clear" (any casing) unreachable.
-    // Blank input is treated as clear so it never stores an empty custom name.
+    // Input is trimmed first, so whitespace-padded "clear" cannot smuggle in a name,
+    // and blank input is treated as clear so it never stores an empty custom name.
     fun apply(target: Block?, rawName: String): Outcome {
-        if (target == null || !ChestNamer.isChest(target)) return Outcome.NotAChest
-        if (rawName.isBlank() || rawName.equals("clear", ignoreCase = true)) {
+        if (target == null) return Outcome.NoTarget
+        if (!ChestNamer.isChest(target)) return Outcome.NotAChest
+        val name = rawName.trim()
+        if (name.isEmpty() || name.equals("clear", ignoreCase = true)) {
+            if (ChestNamer.nameOf(target) == null) return Outcome.NothingToClear
             ChestNamer.clear(target)
             return Outcome.Cleared
         }
-        ChestNamer.setName(target, rawName)
-        return Outcome.Named(rawName)
+        ChestNamer.setName(target, name)
+        return Outcome.Named(name)
     }
 
     companion object {

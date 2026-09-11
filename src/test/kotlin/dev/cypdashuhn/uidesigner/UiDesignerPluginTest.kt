@@ -1,5 +1,6 @@
 package dev.cypdashuhn.uidesigner
 
+import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.jorel.commandapi.CommandAPITestUtilities
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
@@ -99,9 +100,9 @@ class UiDesignerPluginTest {
         val malformed = "output-file: [unclosed\n"
         written.writeText(malformed)
 
-        val readable = plugin.reloadConfiguration()
+        val result = plugin.reloadConfiguration()
 
-        assertFalse(readable)
+        assertEquals(ReloadResult.UsingDefaults, result)
         assertEquals(malformed, written.readText())
         assertFalse(plugin.config.isSet(UiDesignerConfig.OUTPUT_FILE_KEY))
     }
@@ -110,7 +111,24 @@ class UiDesignerPluginTest {
     fun `reload reports a readable config`() {
         val plugin = MockBukkit.load(UiDesignerPlugin::class.java)
 
-        assertTrue(plugin.reloadConfiguration())
+        assertEquals(ReloadResult.Reloaded, plugin.reloadConfiguration())
+    }
+
+    @Test
+    fun `reload leaves a non-string output file unchanged and reports it invalid`() {
+        val plugin = MockBukkit.load(UiDesignerPlugin::class.java)
+        val written = plugin.dataFolder.resolve("config.yml")
+        val invalid = "output-file: 5\n"
+        written.writeText(invalid)
+
+        val result = plugin.reloadConfiguration()
+
+        assertEquals(ReloadResult.InvalidOutput, result)
+        assertEquals(invalid, written.readText())
+        assertEquals(
+            plugin.dataFolder.toPath().resolve(packagedOutputFile()),
+            plugin.uiConfig.outputFile,
+        )
     }
 
     private fun packagedConfigText(): String =
