@@ -1,6 +1,6 @@
 ---
 name: Use rooster-region BlockPos and consolidate model
-status: todo
+status: done
 parent: MVP
 depends-on: ["080"]
 reviewers: [tester, correctness, architecture, readability]
