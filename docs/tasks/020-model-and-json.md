@@ -1,6 +1,6 @@
 ---
 name: Data model and JSON export
-status: todo
+status: done
 parent: MVP
 depends-on: [000]
 reviewers: [tester, correctness, architecture, readability]
@@ -13,7 +13,7 @@ schema in `docs/data-format.md`.
 ## Scope
 - `UiChest`, `UiRow`, `UiSlot` as `@Serializable` data classes.
 - `JsonExporter` producing a pretty-printed JSON array, stable ordering, empty
-  slots omitted, `name` omitted when absent.
+  rows omitted, `name` omitted when absent.
 - Atomic write to a target `Path` (write temp then move).
 - No Bukkit imports in `model` or `export`.
 
@@ -32,5 +32,5 @@ schema in `docs/data-format.md`.
 ## Notes
 - `DesignJson { prettyPrint = true; encodeDefaults = false }` so omitted nullable
   fields stay omitted.
-- Decide and document whether an unnamed chest serializes `"name": ""` or the
-  key is absent; `docs/data-format.md` currently says `""`. Keep them in sync.
+- Unnamed chests and slots omit `name` (null, or blank normalised to null);
+  `docs/data-format.md` documents this.
