@@ -4,36 +4,50 @@ How work is planned, executed, reviewed and committed in this repository.
 
 ## Roles
 
-The primary agent is an **orchestrator**. It does not implement. It plans,
-writes tickets, delegates to subagents, and administers the git repository.
+Two orchestrator tiers, then workers. Nesting is two levels deep; opencode's
+`subagent_depth` defaults to `1` (no subagents of subagents), so this repo sets
+it to `2` in `.opencode/opencode.json`.
 
-Subagents (defined in `.opencode/agent/`):
+| Agent | Tier | Job |
+|---|---|---|
+| `orchestrator` | primary | Owns the queue, picks unblocked tickets, manages branches/worktrees, launches one ticket-orchestrator per ticket. Never implements or reviews. |
+| `ticket-orchestrator` | subagent | Runs one ticket end to end by delegating to the workers. The only agent that may spawn them. |
+| `implementor` | worker | Implements the ticket and its tests. The only agent that edits source. |
+| `tester` | worker | Reviews test coverage: missing, excessive, brittle. |
+| `correctness` | worker | Hunts technical bugs, wrong behaviour, spec mismatches. |
+| `architecture` | worker | Checks fit with existing structure, extendability, over-generalisation. |
+| `readability` | worker | Checks clarity, file hygiene, formatting, followability. |
+| `ux` | worker | Checks the player-facing loop: actions, feedback, presentation. |
 
-| Agent | Job |
-|---|---|
-| `implementor` | Implements the ticket and its tests. The only agent that edits source. |
-| `tester` | Reviews test coverage: missing, excessive, brittle. |
-| `correctness` | Hunts technical bugs, wrong behaviour, spec mismatches. |
-| `architecture` | Checks fit with existing structure, extendability, over-generalisation. |
-| `readability` | Checks clarity, file hygiene, formatting, followability. |
-| `ux` | Checks the player-facing loop: actions, feedback, presentation. |
+Subagents cannot spawn subagents unless their agent config declares a `task`
+permission; `ticket-orchestrator` does, scoped to the workers. Every reviewer
+owns exactly one report file, bound to its role (see
+[Review reports](#review-reports)); the ticket-orchestrator hands those reports
+back to `implementor`.
 
-Omit a reviewer when it is genuinely irrelevant (e.g. `ux` for pure backend).
-Every reviewer owns exactly one report file, bound to its role (see
-[Review reports](#review-reports)); the orchestrator hands those reports back
-to `implementor`.
+## Meta-orchestration
+
+Run by `orchestrator` (primary):
+
+- Pick unblocked tickets: `status: todo` whose `depends-on` are all `done`.
+- Launch one `ticket-orchestrator` subagent per ticket. Run several in parallel
+  when they are file-disjoint; serialize them or isolate each in its own
+  worktree (`../mc-ui-designer--<id>` on branch `ticket/<id>-<slug>`) otherwise.
+- Merge finished ticket branches back in dependency order and update the queue.
 
 ## Per-ticket pipeline
 
-1. Orchestrator picks the next unblocked ticket.
-2. `implementor` implements it on a branch/worktree.
+Run by `ticket-orchestrator`:
+
+1. Read the ticket and its `reviewers` list.
+2. `implementor` implements it on the ticket's branch/worktree.
 3. Run the relevant reviewers in order: `tester`, `correctness`,
    `architecture`, `readability`, `ux`.
 4. Hand all reports to `implementor` for fixes.
 5. **Commit** the resulting state.
 6. Repeat steps 3–5 for a **second round**, so fixes from later reviewers do
    not invalidate earlier ones.
-7. Mark the ticket `done`.
+7. Mark the ticket `done` and commit.
 
 Two rounds total per ticket. Omit stages that do not apply, but keep the order
 of those that remain.
@@ -48,8 +62,8 @@ of those that remain.
   ticket would not have reached review. Reviewing is reading and reasoning, not
   re-executing.
 - If a reviewer suspects a failure, it states the suspicion and the scenario in
-  its report; the orchestrator sends it to the implementor to reproduce. This
-  keeps slow verification in one place instead of repeating it per stage.
+  its report; the ticket-orchestrator sends it to the implementor to reproduce.
+  This keeps slow verification in one place instead of repeating it per stage.
 - Quick read-only inspection (reading files, `git diff`, `fcp query`) is fine.
 
 ## Commits
@@ -79,7 +93,7 @@ Body: goal, scope, acceptance criteria, out of scope, notes.
 
 - `depends-on` lists ticket ids that must be `done` first.
 - `reviewers` lists which pipeline stages apply, in pipeline order.
-- Status is owned by the orchestrator; update it in place.
+- Status is owned by the ticket-orchestrator; update it in place.
 
 ## Review reports
 
@@ -92,8 +106,8 @@ docs/reviews/<ticket-id>/<role>.md
 - The reviewer creates the ticket directory if needed and appends a
   `## Round <n>` section; it never touches any other file.
 - This is the only write a reviewer may perform. Source stays untouched; the
-  orchestrator commits the report alongside the ticket's work.
-- The orchestrator tells each reviewer the ticket id and round number.
+  ticket-orchestrator commits the report alongside the ticket's work.
+- The ticket-orchestrator tells each reviewer the ticket id and round number.
 
 Report body per round:
 
@@ -116,7 +130,7 @@ re-litigating them).
 ```
 
 The reviewer also returns a one-paragraph summary in its reply so the
-orchestrator can hand feedback to `implementor` without re-reading files.
+ticket-orchestrator can hand feedback to `implementor` without re-reading files.
 
 ## Definition of done for a ticket
 

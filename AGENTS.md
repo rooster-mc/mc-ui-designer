@@ -37,11 +37,24 @@ just format     # ktlint
 
 ## Orchestration model
 
-The primary agent is an **orchestrator**: it does not implement. It plans,
-writes tickets, delegates to subagents, and administers git.
+Two orchestrator tiers, then workers:
 
-- Subagents live in `.opencode/agent/`: `implementor`, `tester`,
-  `correctness`, `architecture`, `readability`, `ux`.
+- **Meta-orchestrator** (`orchestrator`, primary): owns the ticket queue,
+  picks unblocked tickets, manages branches/worktrees, and launches one
+  **ticket-orchestrator** per ticket. It never implements or reviews.
+- **Ticket-orchestrator** (subagent): runs one ticket end to end by delegating.
+  It is the only agent allowed to spawn the workers.
+- **Workers** (subagents): `implementor`, `tester`, `correctness`,
+  `architecture`, `readability`, `ux`.
+
+Nesting is two levels deep: `orchestrator` → `ticket-orchestrator` →
+worker. opencode caps subagent nesting at `subagent_depth` (default `1`,
+which forbids subagents from spawning subagents); this repo sets it to `2` in
+`.opencode/opencode.json`, and `ticket-orchestrator` declares a `task`
+permission (subagents otherwise get the `task` tool denied).
+
+Rules:
+
 - `implementor` is the only agent that edits source.
 - Reviewers are read-only except for their own report file,
   `docs/reviews/<ticket-id>/<role>.md`; they never touch source. Report format
@@ -52,6 +65,8 @@ writes tickets, delegates to subagents, and administers git.
 - Only `implementor` runs slow verification (build, `just test`, `just
   format`, the dev server) and must leave the tree green. Reviewers read and
   reason; they do not re-run it.
+- Parallel tickets must be file-disjoint; otherwise the meta-orchestrator
+  serializes them or isolates them in separate worktrees.
 
 ## Git
 
