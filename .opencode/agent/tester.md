@@ -21,7 +21,7 @@ owns that).
   structure, duplicating the implementation, snapshotting noise)?
 - Are tests brittle to legitimate refactors?
 - Is the right layer tested (pure logic vs. MockBukkit integration)? The
-  `model`/`export` packages should be Bukkit-free and well covered; Bukkit
+  `export` package should be Bukkit-free and well covered; Bukkit
   behaviour should use MockBukkit.
 - Do tests actually exercise behaviour, or just the happy path?
 - **Test-environment fidelity.** Call out paths the harness cannot exercise

@@ -1,6 +1,6 @@
 package dev.cypdashuhn.uidesigner.capture
 
-import dev.cypdashuhn.uidesigner.model.BlockPos
+import dev.rooster.region.BlockPos
 import org.bukkit.inventory.ItemStack
 
 data class ChestContent(

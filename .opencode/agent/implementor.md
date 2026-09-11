@@ -24,7 +24,7 @@ chest designs to JSON. You implement exactly one ticket at a time.
 ## Rules
 - Stay within the ticket's scope. Do not opportunistically refactor unrelated
   code; note it instead.
-- Keep the seams described in `docs/architecture.md` (pure `model`/`export`,
+- Keep the seams described in `docs/architecture.md` (pure `export`,
   `SelectionSource` isolation). Bukkit types must not leak into pure packages.
 - Write tests where the ticket says they make sense. Prefer a few meaningful
   tests over many shallow ones.

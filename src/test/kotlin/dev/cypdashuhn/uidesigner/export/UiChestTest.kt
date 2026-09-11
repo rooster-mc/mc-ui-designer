@@ -1,4 +1,4 @@
-package dev.cypdashuhn.uidesigner.model
+package dev.cypdashuhn.uidesigner.export
 
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString

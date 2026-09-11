@@ -84,8 +84,7 @@ Rules:
 ## Conventions
 
 - No code comments unless they explain a non-obvious *why*.
-- Keep `model`/`export` free of Bukkit imports; isolate FAWE behind
-  `SelectionSource`.
+- Keep `export` free of Bukkit imports; isolate FAWE behind `SelectionSource`.
 - Update docs in the same commit as the change that invalidates them.
 - Format with ktlint per `.editorconfig`.
 

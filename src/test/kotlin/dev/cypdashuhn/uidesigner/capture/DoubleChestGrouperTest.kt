@@ -1,8 +1,8 @@
 package dev.cypdashuhn.uidesigner.capture
 
-import dev.cypdashuhn.uidesigner.model.BlockPos
-import dev.cypdashuhn.uidesigner.model.UiChest
-import dev.cypdashuhn.uidesigner.model.UiRow
+import dev.cypdashuhn.uidesigner.export.UiChest
+import dev.cypdashuhn.uidesigner.export.UiRow
+import dev.rooster.region.BlockPos
 import dev.rooster.region.Region
 import net.kyori.adventure.text.Component
 import org.bukkit.Location

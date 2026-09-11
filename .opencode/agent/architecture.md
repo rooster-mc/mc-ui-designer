@@ -18,7 +18,7 @@ extendability, and documentation staleness — not code style or behaviour.
 - Is it extendable to the obvious next steps (more container types, import,
   different output formats) without a rewrite — or is it over-generalised for
   needs that do not exist yet?
-- Are boundaries clean? No Bukkit leakage into `model`/`export`; FAWE behind
+- Are boundaries clean? No Bukkit leakage into `export`; FAWE behind
   `SelectionSource`; commands thin.
 - Is there duplicated logic that will drift, or abstractions that earn their
   keep?

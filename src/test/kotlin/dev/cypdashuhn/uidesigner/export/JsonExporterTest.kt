@@ -1,10 +1,6 @@
 package dev.cypdashuhn.uidesigner.export
 
-import dev.cypdashuhn.uidesigner.model.BlockPos
-import dev.cypdashuhn.uidesigner.model.DesignJson
-import dev.cypdashuhn.uidesigner.model.UiChest
-import dev.cypdashuhn.uidesigner.model.UiRow
-import dev.cypdashuhn.uidesigner.model.UiSlot
+import dev.rooster.region.BlockPos
 import kotlinx.serialization.decodeFromString
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull

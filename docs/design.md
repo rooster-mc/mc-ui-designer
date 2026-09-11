@@ -65,7 +65,7 @@ Out of scope (backlog):
   non-cuboid FAWE selection (`//hcyl`, `//poly`) captures every chest inside its
   bounding box, not only those inside the shape. Shape fidelity is backlog.
 - **Testing:** JUnit 6 + MockBukkit (`org.mockbukkit.mockbukkit:mockbukkit-v26.2`).
-  Pure logic (model, JSON, grouping math) stays Bukkit-free where possible.
+  Pure logic (JSON export/ordering) stays Bukkit-free where possible.
 - **Config:** `config.yml` read through Bukkit's `FileConfiguration`; the
   default output path is a Gradle property (`uiDesigner.defaultOutput`) filtered
   into the packaged `config.yml`.

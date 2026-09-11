@@ -1,6 +1,6 @@
 package dev.cypdashuhn.uidesigner.capture
 
-import dev.cypdashuhn.uidesigner.model.BlockPos
+import dev.rooster.region.BlockPos
 import dev.rooster.region.Region
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer

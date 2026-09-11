@@ -10,12 +10,8 @@ uidesigner/
   config/
     UiDesignerConfig.kt      typed view over config.yml (output path, ...)
     ReloadResult.kt          reloadConfiguration outcome (reloaded/defaults/invalid)
-  model/
-    BlockPos.kt              pure position value type + canonical ordering
-    UiChest.kt               UiChest / UiRow / UiSlot + DesignJson config
   capture/
     ChestContent.kt          capture-side intermediate: chest position + inventory
-    RegionExt.kt             capture-local Region.blockAt lookup seam
     SelectionSource.kt       interface: player -> dev.rooster.region.Region (seam for tests)
     FaweSelectionSource.kt   rooster-region WorldEdit adapter
     ChestCapture.kt          selection source + player -> CapturedSelection? (region + contents)
@@ -24,7 +20,8 @@ uidesigner/
   naming/
     ChestNamer.kt            read/write the name of a chest block
   export/
-    JsonExporter.kt          model -> JSON string/file (atomic write; single ordering authority)
+    UiChest.kt               UiChest / UiRow / UiSlot + DesignJson config
+    JsonExporter.kt          UiChest -> JSON string/file (atomic write; single ordering authority)
   commands/
     UiDesignerCommand.kt     /uidesigner save | reload | help
     ChestEditCommand.kt      /chest-edit <name> | clear (uidesigner.chest-edit)
@@ -53,24 +50,24 @@ uidesigner/
 - **`Region` is cuboid-only.** `FaweSelectionSource` wraps the library adapter
   and reduces any FAWE selection (including non-cuboid `//hcyl`/`//poly`) to its
   min/max bounding box, so a chest inside the box but outside the actual
-  selection is captured. It also drops a stale selection whose world is not the
-  player's current world, because the library's `worldEditSelection()` keys off
-  the session's selection world (which survives a world change). Shape fidelity
-  is out of scope for the MVP. The library `Region` has no `blockAt` helper, so
-  `capture/RegionExt.kt` adds an `internal Region.blockAt(BlockPos)` extension
-  that the grouper and the command use for `BlockPos`-keyed lookups; the
-  scanner's int-triple loop calls `World.getBlockAt` directly.
-- **`model`** and **`export`** are pure Kotlin: no Bukkit imports. They are the
-  easiest place to get coverage and the place where format correctness lives.
-- **`ChestContent` lives in `capture/`, not `model/`** (decided in 030): it holds
-  Bukkit `ItemStack`s, so putting it in `model` would break that package's
-  purity. `BlockPos` moved from `UiChest.kt` to `model/BlockPos.kt` in the same
-  ticket, once `Region`/`ChestContent` became its second consumer.
+  selection is captured. World scoping lives in the library's
+  `worldEditSelection()`, which returns null when the session's selection world
+  is not the player's current world (the selection world survives a world
+  change); `FaweSelectionSource` only converts the returned selection to a
+  `Region`. Shape fidelity is out of scope for the MVP. The library's
+  `Region.blockAt(BlockPos)` backs the grouper's and the command's `BlockPos`-keyed
+  lookups; the scanner's int-triple loop calls `World.getBlockAt` directly.
+- **`export`** is pure Kotlin: no Bukkit imports, and `BlockPos` comes from the
+  library. It is the easiest place to get coverage and the place where format
+  correctness lives.
+- **`ChestContent` lives in `capture/`, not `export/`** (decided in 030): it holds
+  Bukkit `ItemStack`s, so putting it in the pure `export` package would break
+  that package's purity.
 - **`ChestScanner`** is the only place that *enumerates* blocks and reads
   inventories, turning Bukkit `Block`/`Inventory` into the capture-side model
   (`ChestContent`); grouping may do targeted block lookups through the injected
   `Region` (Bukkit-coupled by design, testable with MockBukkit), and only
-  `model`/`export` are fully Bukkit-free. It returns one entry per chest block,
+  `export` is fully Bukkit-free. It returns one entry per chest block,
   ordered by `x`, then `y`, then `z`, and skips blocks in unloaded chunks rather
   than forcing a chunk load. Each entry reads the block's own 27-slot inventory
   (`Chest.getBlockInventory`), not the shared double-chest inventory, so a
@@ -83,7 +80,7 @@ uidesigner/
 - **Grouper input contract (040/060).** `ChestContent` stays `position + items`
   only. `DoubleChestGrouper` receives the `Region` alongside the
   `List<ChestContent>`, so it can reach each block via `region.blockAt(position)`
-  (the capture-local extension); 060 reads chest names from the same blocks with
+  (the library's member); 060 reads chest names from the same blocks with
   `ChestNamer.nameOf(block)`.
   `items` is expected to be a positive multiple of 9 (the scanner captures 27, a
   merged double 54); the grouper fails fast otherwise rather than emitting a

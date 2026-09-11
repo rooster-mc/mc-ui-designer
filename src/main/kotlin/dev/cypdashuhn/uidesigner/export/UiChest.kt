@@ -1,5 +1,6 @@
-package dev.cypdashuhn.uidesigner.model
+package dev.cypdashuhn.uidesigner.export
 
+import dev.rooster.region.BlockPos
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlinx.serialization.json.Json

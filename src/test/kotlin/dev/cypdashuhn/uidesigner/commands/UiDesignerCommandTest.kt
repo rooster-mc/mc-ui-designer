@@ -3,14 +3,14 @@ package dev.cypdashuhn.uidesigner.commands
 import dev.cypdashuhn.uidesigner.capture.SelectionSource
 import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
+import dev.cypdashuhn.uidesigner.export.DesignJson
 import dev.cypdashuhn.uidesigner.export.JsonExporter
-import dev.cypdashuhn.uidesigner.model.BlockPos
-import dev.cypdashuhn.uidesigner.model.DesignJson
-import dev.cypdashuhn.uidesigner.model.UiChest
+import dev.cypdashuhn.uidesigner.export.UiChest
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
 import dev.cypdashuhn.uidesigner.util.Messages
 import dev.jorel.commandapi.CommandAPITestUtilities
 import dev.jorel.commandapi.MockCommandAPIPlugin
+import dev.rooster.region.BlockPos
 import dev.rooster.region.Region
 import kotlinx.serialization.decodeFromString
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
