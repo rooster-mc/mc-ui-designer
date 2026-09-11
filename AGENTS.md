@@ -22,7 +22,7 @@ Read these before working:
 
 Paper `26.2`, Java `25`, Kotlin `2.4.10`, Gradle Kotlin DSL. CommandAPI
 (`commandapi-paper-shade`), `kotlinx-serialization-json`, FAWE (`compileOnly`),
-JUnit 5 + MockBukkit. Full list and rationale in `docs/design.md`.
+JUnit 6 + MockBukkit. Full list and rationale in `docs/design.md`.
 
 ## Commands
 

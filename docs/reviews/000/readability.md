@@ -102,3 +102,101 @@ both wire `shadowJar`, and two version choices have no visible reason.
 - **`settings.gradle.kts` / `gradle.properties`.** Small and single-purpose
   (toolchain resolver, `rootProject.name`, JVM args, one project property); no
   unused entries.
+
+## Round 2
+
+### Verdict
+Ship with fixes. All five Round-1 readability findings are resolved, and the
+fixes themselves are clean: `just build` is single-sourced, `writeDevServerFiles`
+is named for what it does and always runs, and the three new why-comments each
+explain a non-obvious reason. What remains is one missed doc line
+(`AGENTS.md:25`) plus two low-severity spots where the code's *why* is still
+invisible to a newcomer.
+
+### Issues
+
+#### 1. `AGENTS.md` Stack line still says "JUnit 5" (severity: low)
+- Location: `AGENTS.md:25` vs `build.gradle.kts:42`, `docs/design.md:57`,
+  `docs/architecture.md:62`
+- Problem: This is the last surviving copy of the Round-1 doc drift. Round 1
+  fixed `docs/design.md`, `docs/architecture.md` and the `AGENTS.md` "Current
+  status" block, but the Stack paragraph was missed. `AGENTS.md` is the first
+  file every agent opens, and it now contradicts the build and the two docs it
+  points at. (Correctness and architecture flagged the same line in their Round
+  2; noting it here because Round 1 owned the doc-consistency finding.)
+- Suggested fix: change `AGENTS.md:25` to "JUnit 6 + MockBukkit". One word.
+
+#### 2. `ReplaceTokens` block hides why it replaced `expand` (severity: low)
+- Location: `build.gradle.kts:59-67`
+- Problem: The old `expand(mapOf(...))` was one self-explanatory line; the new
+  form passes three stringly-typed Ant keys (`"tokens"`, `"beginToken"`,
+  `"endToken"`) and escapes the dollar as `"\${"`. A reader who does not already
+  know Gradle's Ant-filter convention cannot tell what is being replaced or why
+  the begin/end tokens are overridden — and the reason `expand` was abandoned
+  (it runs the whole file through Groovy's template engine, so stray `$`
+  sequences are hazards; `ReplaceTokens` matches only `${...}`) is not visible
+  anywhere. The behaviour is correct; only the intent is opaque.
+- Suggested fix: add one why-comment above `filter<ReplaceTokens>` stating that
+  only `${...}` is substituted and everything else passes through, or move that
+  rationale into `docs/design.md:59-61` if a comment is unwanted. Do not revert
+  to `expand`.
+
+#### 3. BOM plus explicit FAWE pin looks redundant with no stated reason (severity: low)
+- Location: `build.gradle.kts:38-40`
+- Problem: The fix added `$faweVersion` to the two `compileOnly` FAWE
+  coordinates while keeping `platform("com.intellectualsites.bom:bom-newest")`
+  directly above them. A reader naturally asks "why pin versions when a BOM is
+  right there?" and has to infer that the BOM only supplies transitive deps
+  while the explicit pin overrides its own FAWE `2.15.0`. This is the same
+  latent dual-version mechanism architecture raises in its Round 2 issue 1;
+  from a readability standpoint the code does not say which of the two is
+  authoritative.
+- Suggested fix: one why-comment on `:38` (e.g. the BOM supplies transitives
+  only; the explicit `$faweVersion` pins FAWE itself), matching architecture's
+  suggested wording.
+
+### Non-issues (Round-1 verification and new-fix re-scan)
+
+- **Round-1 #1 (stale contract docs) fixed except issue 1 above.**
+  `docs/design.md:46-57` now names run-paper `3.1.0`, JUnit 6, the `2.15.3` FAWE
+  pin and the GitHub download; `docs/architecture.md:62` says JUnit 6; the
+  `AGENTS.md:36` parenthetical is gone and `AGENTS.md:85-90` describes the
+  shipped setup accurately.
+- **Round-1 #2 (`prepareRunServer`) fixed and the fix reads well.**
+  `writeDevServerFiles` (`build.gradle.kts:69-82`) says what it does, and
+  `outputs.upToDateWhen { false }` (`:75`) makes the always-run behaviour
+  explicit rather than a Gradle-semantics trap. The declared `outputs.files(...)`
+  is now redundant with that flag but harmless (it still registers the task's
+  products), so it is not dead code. The EULA comment (`:79`) is a genuine
+  *why* — it records that auto-accepting is scoped to the local dev server —
+  and earns its line.
+- **Round-1 #3 (double `shadowJar` wiring) fixed.** `justfile:7-8` is now
+  `./gradlew build`, so `build.gradle.kts:101-103` is the single source of truth
+  for the shaded jar, and the `justfile` comment still matches the outcome.
+- **Round-1 #4 (`paper-api` split) fixed.** The comment at `build.gradle.kts:45`
+  sits directly above the `26.2.build.111-stable` line it explains and states
+  both the reason and the fact that main stays on the server build. Placement
+  and phrasing are right.
+- **Round-1 #5 (`open` plugin) resolution is readable and acceptable.** The
+  comment at `UiDesignerPlugin.kt:5` ("MockBukkit loads plugins by subclassing;
+  Kotlin classes are final by default") turns a puzzling modifier into a stated
+  constraint, and it is the one place the `open` keyword appears, so the
+  documented reason is discoverable. Keeping `open` with the explanation is
+  better than a `final` class that breaks the harness.
+- **`faweVersion` placement is good.** `build.gradle.kts:17` is the only
+  definition, feeding both the `compileOnly` pins (`:39-40`) and the GitHub
+  download (`:91-92`); one edit now moves the compile and run versions together,
+  and the name cannot be confused with `version` in context.
+- **Ticket "Deviations" section is clear and correctly scoped.**
+  `docs/tasks/000-project-setup.md:52-66` records each departure (run-paper
+  `3.1.0`, JUnit 6, GitHub-vs-Hangar FAWE, foojay `1.0.0`, removed command
+  declarations) with a one-line reason, so the still-historical Scope bullets
+  (`:15,19,23,28`) do not mislead — the reader is told the body is superseded
+  rather than being made to rewrite history.
+- **New test line reads fine.** `assertEquals("UiDesigner", plugin.name)` plus
+  the alphabetised `assertEquals`/`assertTrue` imports add a concrete assertion
+  without obscuring the mock/load/assert/unmock flow.
+- **Formatting.** No `.kt`/`.kts` line exceeds the `.editorconfig` 100-column
+  limit; the longest (`build.gradle.kts:62`) is 95 columns. Indentation,
+  trailing commas and the new comment lines all match ktlint, and no gratuitous
+  reformatting or dead code was introduced by the fixes.

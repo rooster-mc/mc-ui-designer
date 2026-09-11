@@ -35,6 +35,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("dev.jorel:commandapi-paper-shade:11.2.0")
 
+    // BOM supplies transitive deps only; the explicit $faweVersion overrides its FAWE 2.15.0.
     compileOnly(platform("com.intellectualsites.bom:bom-newest:1.56"))
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core:$faweVersion")
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit:$faweVersion")
@@ -58,6 +59,7 @@ bukkit {
 
 tasks.processResources {
     filesMatching("config.yml") {
+        // Only ${...} is substituted; stray $ sequences pass through (unlike Groovy expand).
         filter<ReplaceTokens>(
             "tokens" to mapOf("defaultOutput" to project.property("uiDesigner.defaultOutput")),
             "beginToken" to "\${",

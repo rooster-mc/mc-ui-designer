@@ -108,3 +108,112 @@ should be resolved before ticket 030 compiles against FAWE.
   compiles against a Paper API removed in 111, revisit; not worth churn now.
 - **`just build` = `./gradlew build shadowJar`.** Redundant since `build`
   depends on `shadowJar` (`:101-103`), but harmless.
+
+## Round 2
+
+### Verdict
+Ship with two low-severity follow-ups. All three Round-1 architecture issues are
+resolved: `plugin.yml` no longer declares commands, the design/architecture/status
+docs now match the build, and FAWE compile and run are driven from one
+`faweVersion` constant. The package root, single-module shape, `compileOnly`
+boundaries and extendability to 010–070 are intact, and nothing is
+over-generalised. The remaining concern is that the retained IntellectualSites
+BOM is still a latent second FAWE version (`2.15.0`) and ticket 030's note still
+names the BOM as the API authority; `AGENTS.md:25` also still says JUnit 5.
+
+### Issues
+
+#### 1. BOM still pins FAWE `2.15.0`; ticket 030's note points at the BOM, not the pin (severity: low) — fix now
+- Location: `build.gradle.kts:17,38-40`, `docs/tasks/030-selection-capture.md:41`,
+  `docs/design.md:52-56`
+- Problem: The single `faweVersion = "2.15.3"` constant (`:17`) feeds both the
+  `compileOnly` Core/Bukkit pins (`:39-40`) and the GitHub download (`:91-92`),
+  which does close the Round-1 compile/run drift. But the BOM platform
+  (`:38`) still declares `FastAsyncWorldEdit-{Core,Bukkit}` at `2.15.0` in its
+  `dependencyManagement`, and the explicit pin only wins through Gradle's
+  highest-version conflict resolution. That is a non-obvious dual mechanism: a
+  reader who removes the explicit version "to trust the BOM" silently drops to
+  `2.15.0`, and ticket 030's note (`030-selection-capture.md:41`) still says
+  "Verify exact API against the FAWE version resolved by the BOM" — which is now
+  the *wrong* authority (2.15.0) for the classpath it compiles against (2.15.3).
+  This is the one place the fix could bite 030, and it is a wording/comment fix,
+  not a resolution bug (the correctness reviewer confirmed only `2_15_3`
+  artifacts are resolved).
+- Suggested fix: update the 030 note to "against the shared `faweVersion`
+  (`2.15.3`)" and add one why-comment above the BOM line stating that it
+  supplies transitive versions only and the explicit pin overrides its FAWE
+  `2.15.0`. No dependency rewrite is needed; dropping the BOM entirely is a
+  larger, unnecessary change.
+
+#### 2. `AGENTS.md:25` still says "JUnit 5 + MockBukkit" (severity: low) — fix now
+- Location: `AGENTS.md:25` vs `build.gradle.kts:42`, `docs/design.md:57`,
+  `docs/architecture.md:62`
+- Problem: This is the same doc-drift class as Round-1 issue 2. Round 1 updated
+  `docs/design.md` and `docs/architecture.md` and the `AGENTS.md` "Current
+  status" block, but the Stack line was missed. `AGENTS.md` is the first file
+  every agent reads, and it now contradicts the build and the other two docs.
+  (The correctness reviewer flagged the same line in its Round 2; recording it
+  here as an architecture-contract issue because Round 1 owned the doc-consistency
+  finding.)
+- Suggested fix: change `AGENTS.md:25` to "JUnit 6 + MockBukkit".
+
+### Non-issues (Round-1 verification and re-scan)
+
+- **Round-1 #1 (`plugin.yml` command declarations) genuinely fixed.** The
+  `bukkit { }` block (`build.gradle.kts:53-57`) no longer has `commands`, and the
+  generated `build/resources/main/plugin.yml` and
+  `build/generated/plugin-yml/Bukkit/plugin.yml` contain only
+  name/version/main/api-version. No source or doc references the removed
+  declarations. CommandAPI remains the single owner for tickets 050/060, and the
+  deviation is recorded at `docs/tasks/000-project-setup.md:64-66`.
+- **Round-1 #2 (stale design/status docs) fixed except the one line above.**
+  `docs/design.md:46-57` now names run-paper `3.1.0`, JUnit 6, the GitHub FAWE
+  download and the serialization/ktlint plugins; `docs/architecture.md:62` says
+  JUnit 6; `AGENTS.md:85-90` describes the shipped setup. `docs/design.md:59-61`
+  still accurately describes the `uiDesigner.defaultOutput` filtering, and the
+  `config.yml` key matches `gradle.properties`.
+- **Round-1 #3 (FAWE compile/run drift) fixed at the seam that matters.** The
+  constant is the right shape: one edit changes both the classpath and the dev
+  server. `compileOnly` is still correct — FAWE is provided by the server
+  (run-paper drops the Paper jar into `plugins/`), and shading it would duplicate
+  classes already on the server classpath. Keeping the BOM for transitives is
+  acceptable; only the comment/030-note clarity above is missing.
+- **`ReplaceTokens` filtering is the right amount of machinery, not an
+  over-abstraction.** It replaces the old whole-file `expand`/`SimpleTemplateEngine`
+  hazard with explicit `${defaultOutput}` token matching (`build.gradle.kts:59-67`),
+  and unknown `$`/`${...}` pass through. It handles exactly the one build-time
+  default the design specifies; ticket 010's option to move to a generated
+  `BuildConfig` remains available if config grows, but nothing here pre-empts or
+  over-builds it. No typed-config object is warranted yet.
+- **`writeDevServerFiles` always-run is a deliberate dev-server behaviour, not a
+  hidden abstraction.** `outputs.upToDateWhen { false }` (`:75`) re-applies the
+  port/offline/EULA files on every `runServer`, which is what the ticket's
+  "boots on 25000" criterion needs; the task is now named for what it does and
+  is only wired into `runServer` (`:84-95`). The declared `outputs.files(...)` is
+  redundant given the always-run flag but harmless.
+- **Removed command declarations vs. ticket scope wording is resolved by the
+  deviations section.** `docs/tasks/000-project-setup.md:21` still lists
+  "command declarations" in the original Scope and lines 15/18-19/23/28/47 still
+  carry the pre-ticket versions, but the "Deviations from this ticket" section
+  (`:52-66`) explicitly supersedes them. That is the standard place to record
+  departures; not worth rewriting the historical scope.
+- **Extendability to 010–070 is intact.** *010* needs `saveDefaultConfig()` and
+  `UiDesignerConfig` — no build change, filtering already present. *020* needs
+  the serialization plugin/runtime — present (`:7,35`). *030* needs FAWE
+  `compileOnly` and the `SelectionSource` seam — present. *040* uses Bukkit
+  `DoubleChest` inside `ChestScanner`/grouper — no build change. *050* needs
+  CommandAPI shaded — present (`:36`). *060/070* orchestrate existing pieces.
+  The only cross-cutting edit any of these needs is the comment/note in issue 1.
+- **No over-generalisation.** No empty `config/`, `model/`, `capture/`,
+  `commands/` packages; no speculative interfaces beyond the one seam
+  (`SelectionSource`) the architecture explicitly reserves; the extra `format-check`
+  and `clean` just recipes are small and self-explanatory.
+- **Package root, single module, clean boundaries still hold.** Root package
+  `dev.cypdashuhn.uidesigner`, `UiDesignerPlugin` as the only main class, test
+  package mirrored under `src/test/kotlin`; no Bukkit import outside the plugin
+  entry point; FAWE stays `compileOnly`; CommandAPI/serialization are
+  `implementation` and shaded (`:97-99`). The `open` modifier on
+  `UiDesignerPlugin` with its why-comment is a MockBukkit subclassing
+  requirement, not a production extension point, and is correctly documented.
+- **`paper-api` build 123/111 split still deliberate and now commented**
+  (`build.gradle.kts:45-46`), matching Round-1's carry-over note.

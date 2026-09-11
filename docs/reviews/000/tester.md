@@ -69,3 +69,63 @@ is unit-testable. The remaining issues are low-severity polish, not blockers.
 - **Naming/style.** Backticked sentence test name matches the convention in
   `docs/architecture.md:62`; test lives in the correct `src/test/kotlin`
   source set and package.
+
+## Round 2
+
+### Verdict
+Ship. Both Round-1 test issues are resolved and the Round-1 fixes introduced no
+new test-quality problems. The single MockBukkit smoke test remains the right
+test for a setup ticket, and the added name assertion is genuinely meaningful
+rather than over-coupling.
+
+### Issues
+None.
+
+### Non-issues
+- **Round-1 issue 1 (paper-api build divergence) resolved.**
+  `build.gradle.kts:45` now carries the why-comment above the test dependency
+  (`// MockBukkit 4.116.1 targets Paper build 111; main stays on the server
+  build.`), exactly the one-line `why` Round 1 asked for. The comment is
+  accurate: MockBukkit `4.116.1`'s POM is built against build 111. A shared
+  version constant/version catalog would remove the duplication entirely, but
+  that is optional polish and was not required to close the issue.
+- **Round-1 issue 2 (plugin identity unasserted) resolved and worth keeping.**
+  `UiDesignerPluginTest.kt:15` asserts `assertEquals("UiDesigner", plugin.name)`.
+  This is not over-coupling: MockBukkit's descriptor lookup
+  (`PluginManagerMock.findPluginDescription`, sources jar lines 551-587) scans
+  `plugin.yml`/`paper-plugin.yml` for a descriptor whose `main` equals the
+  loaded class, and only falls back to `class1.getSimpleName()` when none is
+  found. If the generated `plugin.yml` were absent, if `main` were wrong, or if
+  `bukkit { name = ... }` were misspelled, `plugin.name` would be
+  `UiDesignerPlugin` (or the wrong string) and the assertion would fail. So the
+  one assertion indirectly covers both the `name` and `main` metadata, which is
+  precisely the "plugin jar loads" criterion that is unit-testable. It stops
+  short of asserting `apiVersion`/aliases/descriptions, as Round 1 advised.
+- **The test name (`plugin loads and enables`, `:10`) still describes the test
+  accurately.** The name assertion is supplementary; renaming to something like
+  `plugin loads with correct name and enables` would be marginally clearer but
+  is not worth churn, and the current name is not misleading.
+- **`open class UiDesignerPlugin` (`UiDesignerPlugin.kt:6`) is a test-harness
+  requirement, not a test-quality defect.** MockBukkit's `loadProxyClass`
+  subclasses the plugin class, so a Kotlin `final` class fails with
+  `Cannot subclass ... final types`; the why-comment documents this. The `open`
+  modifier is the minimum production concession and does not weaken the test or
+  the production contract.
+- **`config.yml` `ReplaceTokens` filtering remains untested here — correctly
+  deferred.** Ticket 010 owns default/relative/absolute path resolution and
+  reload, and its tests will read the packaged resource; a filter test now would
+  duplicate that. Ticket 000's acceptance criteria never mention config.
+- **No pure-logic tests expected or needed.** No `model`/`export` packages exist
+  yet, so there is nothing Bukkit-free to cover; when 020/040 land they must use
+  plain JUnit without MockBukkit, as Round 1 noted.
+- **No test for `onDisable`, log lines, port `25000`, FAWE presence, or real
+  jar loading.** These are dev-server/integration concerns verified by the
+  implementor's `just run`; unit-testing them would be brittle and add no value.
+- **Manual `mock()`/`unmock()` with `try/finally` (`:11-19`) is still the right
+  call for a single test.** No leaked global server state; `MockBukkitExtension`
+  would be equivalent, not better, here.
+- **Round-1 fix fallout introduces no test regressions.** The `plugin.yml`
+  command-block removal, FAWE pinning to `2.15.3`, `ReplaceTokens` swap, and
+  `writeDevServerFiles`/`upToDateWhen { false }` rename all live in the Gradle
+  build/run path; none is exercised by the smoke test and none changes its
+  inputs or assertions.

@@ -38,4 +38,4 @@ inventories, with no double-chest merging yet.
 - Large selections: a full block iteration is acceptable for MVP, but note the
   cost and prefer a chest mask/iterator if FAWE offers one.
 - FAWE API: `WorldEdit.getInstance().sessionManager` / `LocalSession.selection`.
-  Verify exact API against the FAWE version resolved by the BOM.
+  Verify exact API against the shared `faweVersion` (`2.15.3`), not the BOM.

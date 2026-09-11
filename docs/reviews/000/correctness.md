@@ -126,3 +126,88 @@ blockers.
 - **`just build` running `build shadowJar`.** Redundant (the explicit
   `tasks.build { dependsOn("shadowJar") }` at `build.gradle.kts:101-103` already
   wires it) but harmless.
+
+## Round 2
+
+### Verdict
+Ship. All four Round-1 issues are genuinely resolved, not merely present: FAWE
+resolves to `2.15.3` on both compile and run, the `ReplaceTokens` filter emits
+the correct `config.yml`, the generated `plugin.yml` has no commands and loads
+cleanly, and `writeDevServerFiles` re-applies the dev-server settings on every
+run. All four acceptance criteria still hold. One low-severity doc drift remains
+(`AGENTS.md` still says "JUnit 5").
+
+### Issues
+
+#### 1. `AGENTS.md` stack line still says JUnit 5 (severity: low)
+- Location: `AGENTS.md:25`
+- Problem: The build uses `org.junit.jupiter:junit-jupiter:6.1.3`
+  (`build.gradle.kts:42`) and Round-1 fixed `docs/design.md:57` and
+  `docs/architecture.md:62`, but `AGENTS.md:25` still reads "JUnit 5 +
+  MockBukkit". It is the same doc-drift class as Round-1 issue 2, and this file
+  is the first thing every agent reads, so a reader comparing it to the build
+  sees a contradiction.
+- Repro: read `AGENTS.md:25` next to `build.gradle.kts:42` /
+  `docs/design.md:57`.
+- Suggested fix: change `AGENTS.md:25` to "JUnit 6 + MockBukkit".
+
+### Non-issues (Round-1 verification)
+
+- **FAWE version coherence (Round-1 #4) is genuinely fixed.** `faweVersion =
+  "2.15.3"` (`build.gradle.kts:17`) feeds both the `compileOnly` Core/Bukkit
+  pins (`:39-40`) and the GitHub download (`:91-92`). The `platform(...)` BOM
+  contributes only Maven-`dependencyManagement` (prefer) constraints (BOM POM
+  lines 94-103), and Gradle conflict resolution selects the higher direct
+  version `2.15.3` over the BOM's `2.15.0`. Verified from the Gradle execution
+  history: the only FAWE transforms present are
+  `FastAsyncWorldEdit-{Core,Bukkit,Libs-Core,Libs-Bukkit}-2_15_3_jar-snapshot.bin`;
+  no `2.15.0` path appears. The direct `paper-api 26.2.build.123` likewise beats
+  the BOM's `paper-api 1.21.8` constraint, and transitive versions are not
+  downgraded (adventure `5.2.0`, guava `33.6.0`, gson `2.14.0`, log4j `2.26.0`).
+  No resolution-conflict risk.
+- **`ReplaceTokens` fix (Round-1 #3) is correct.** Ant builds the lookup key as
+  `beginToken + key + endToken` (`ReplaceTokens.java:120-122`), so
+  `"tokens" to mapOf("defaultOutput" to ...)`, `beginToken = "\${"`,
+  `endToken = "}"` matches exactly `${defaultOutput}`. The packaged result is
+  `output-file: plugins/UiDesigner/design.json` in both
+  `build/resources/main/config.yml` and the shaded jar, regenerated after the
+  current `build.gradle.kts` (mtimes 20:31:44 vs 20:31:00). A literal `$`
+  (e.g. `$5`) is no longer consumed: the reader only reads ahead while the
+  buffer is a prefix of a known token and otherwise emits the first char
+  (`ReplaceTokens.java:144-164`), so unknown `${foo}` and bare `$` pass through
+  unchanged. The only residual limitation is that there is no escape for a
+  literal `${defaultOutput}`; that is narrower than the old whole-file
+  `SimpleTemplateEngine` hazard, not worse.
+- **Removing `commands {}` (Round-1 #1) is clean.** The generated
+  `plugin.yml` (`build/resources/main/plugin.yml`,
+  `build/generated/plugin-yml/Bukkit/plugin.yml`) contains only
+  name/version/main/api-version. No source, build script, or current doc
+  references the removed declarations. MockBukkit still loads and enables the
+  plugin (test XML `tests="1" failures="0" errors="0"`, `UiDesigner enabled`),
+  and `run/logs/latest.log` shows a clean load/enable with no command warnings.
+- **`writeDevServerFiles` always-run (Round-1 readability #2) is correct.**
+  `outputs.upToDateWhen { false }` (`build.gradle.kts:75`) forces the write
+  before `runServer`; `run/server.properties` shows `server-port=25000` and
+  `online-mode=false` (Paper rewrote the remaining defaults at 20:31:26),
+  `run/eula.txt` is `eula=true`, and `run/logs/latest.log` confirms
+  `Starting Minecraft server on *:25000` plus the offline-mode warning. The
+  declared `outputs.files(...)` is now redundant but harmless.
+- **`open class UiDesignerPlugin` is required and the new why-comment is
+  accurate.** MockBukkit 4.116.1 `PluginManagerMock.loadPlugin` replaces the
+  class with `createClassLoader(...).loadProxyClass(class1)`
+  (`PluginManagerMock.java:467`), which uses ByteBuddy
+  `.subclass(target, ...)` (`MockBukkitConfiguredPluginClassLoader.java:101-105`).
+  ByteBuddy cannot subclass a final class, so the Round-1 readability suggestion
+  to drop `open` was wrong; the implementor correctly kept it and explained why.
+- **Acceptance criteria still hold.** AC1: `justfile build` = `./gradlew build`
+  and `tasks.build { dependsOn("shadowJar") }` produce
+  `build/libs/UiDesigner-1.0-SNAPSHOT-all.jar`. AC2: the log shows `*:25000`,
+  FAWE `2.15.3+1704422`, and `[UiDesigner] UiDesigner enabled`. AC3: the test
+  XML is `tests="1" failures="0" errors="0"`. AC4: the log shows load/enable
+  with no errors.
+- **Ticket deviations are recorded.** `docs/tasks/000-project-setup.md:52-66`
+  documents run-paper `3.1.0`, JUnit `6.1.3`, the GitHub FAWE download, foojay
+  `1.0.0`, and the command removal; `docs/design.md:46-57` and
+  `docs/architecture.md:62` now match the build. The remaining old strings in
+  the ticket body (lines 15, 19, 23, 28, 47) are the original scope explicitly
+  superseded by the deviations section, not unaddressed drift.
