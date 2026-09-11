@@ -1,6 +1,6 @@
 ---
 name: FAWE selection capture and chest scan
-status: todo
+status: done
 parent: MVP
 depends-on: [020]
 reviewers: [tester, correctness, architecture]
