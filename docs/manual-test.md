@@ -13,6 +13,8 @@ Status: `unverified` | `passed` | `failed`.
 | MT-002 | 050 | Name a chest, restart the server, and confirm the name survives and appears in a subsequent export. | unverified |
 | MT-003 | 040 | With a real (non-MockBukkit) server, confirm the `DoubleChest` holder path merges both halves across all four orientations, not just the geometry fallback. | unverified |
 | MT-004 | 030 | Confirm a real FAWE selection (including a non-cuboid one) scans the expected chests and that large selections do not stall the server noticeably. | unverified |
+| MT-005 | 080 | Cross-world stale selection (not automatable: needs a live FAWE session): select a region in world A, teleport to world B without re-selecting, run `/uidesigner save`, and confirm it reports no selection instead of scanning B at A's coordinates. | unverified |
+| MT-006 | 080 | Dev-server end-to-end after the rooster-region swap (not automatable: needs a live FAWE session and Paper): `just run`, place/fill/name chests, select the region with FAWE, run `/uidesigner save`, and confirm the server boots with the library-backed selection and the JSON matches `docs/data-format.md`. | unverified |
 
 ## How to run
 

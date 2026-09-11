@@ -1,6 +1,6 @@
 ---
 name: Adopt rooster-region for capture
-status: todo
+status: done
 parent: MVP
 depends-on: ["060"]
 reviewers: [tester, correctness, architecture, readability]
