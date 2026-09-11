@@ -1,6 +1,6 @@
 ---
 name: Command UX polish
-status: todo
+status: done
 parent: Polish
 depends-on: [060]
 reviewers: [ux, readability, correctness]
