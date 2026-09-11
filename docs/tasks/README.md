@@ -10,7 +10,7 @@ goes through the review pipeline in `docs/workflow.md`.
 | [000](000-project-setup.md) | Project setup and dev server | MVP | — | done |
 | [010](010-config.md) | Config loading and default output path | MVP | 000 | done |
 | [020](020-model-and-json.md) | Data model and JSON export | MVP | 000 | done |
-| [030](030-selection-capture.md) | FAWE selection capture and chest scan | MVP | 020 | todo |
+| [030](030-selection-capture.md) | FAWE selection capture and chest scan | MVP | 020 | done |
 | [040](040-double-chest-grouping.md) | Double-chest grouping | MVP | 030 | todo |
 | [050](050-chest-naming.md) | `/chest-edit` naming | MVP | 000 | done |
 | [060](060-export-command.md) | `/uidesigner save` export command | MVP | 010, 020, 030, 040, 050 | todo |
