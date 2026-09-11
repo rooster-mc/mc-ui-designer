@@ -47,3 +47,34 @@ None.
 - **Tester's findings:** concur with `docs/reviews/090/tester.md`. Its
   non-findings about ordering coverage, `Region.blockAt` coverage and the
   dropped guard match what I traced above; I add no finding of my own.
+
+## Round 2
+### Verdict
+Ship. The source and test trees are byte-identical to the state I reviewed in
+round 1 (`git diff a320523 -- src` is empty; `HEAD` is `a320523`, the only
+working-tree change is `docs/reviews/090/tester.md`), so every round-1
+non-finding still holds verbatim. The round-2 edits are documentation and
+agent-prompt wording only and introduce no contract inconsistency.
+
+### Findings
+None.
+
+### Non-findings
+- **Round-1 non-findings are unchanged.** The library `BlockPos` still matches
+  the deleted value type, `Region.blockAt` still matches the deleted extension,
+  the dropped `FaweSelectionSource` guard is still subsumed by the world-scoped
+  `worldEditSelection()`, and the JSON shape/`@Transient position`/`DesignJson`
+  config are untouched. No source file changed after `a320523`, so none of the
+  round-1 reasoning needs revisiting.
+- **The round-2 doc edits do not contradict any data/integration contract.**
+  `docs/architecture.md:22-24` places `UiChest.kt` in `export/` beside
+  `JsonExporter.kt`, matching the actual package; `docs/architecture.md:55-64`
+  and `docs/design.md:68` restate that `export` is Bukkit-free with `BlockPos`
+  sourced from the library, which is true — `dev.rooster.region.BlockPos`
+  (`rooster-region/core/.../BlockPos.kt`) imports no Bukkit types, and
+  `export/UiChest.kt:3` imports only that pure value type. The prompt edits
+  (`.opencode/agent/{implementor,architecture,tester}.md`) drop the now-deleted
+  `model` package from their seam descriptions and match the shipped layout.
+- **Tester's round 2:** concur with `docs/reviews/090/tester.md` `## Round 2`;
+  the source/tests are unchanged, so its round-1 test-scope conclusions remain
+  valid and no new manual-test entry is warranted.

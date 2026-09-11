@@ -54,3 +54,47 @@ None.
   behaviour, outside my scope, and add no readability work. The doc-staleness
   findings in `docs/reviews/090/architecture.md` are architecture-owned; I do
   not re-report them.
+
+## Round 2
+### Verdict
+Ship. No source or test file changed after round 1 (`git diff a320523 -- src`
+is empty), so every round-1 non-finding holds verbatim. The round-2 deltas are
+doc and agent-prompt wording only, and they read cleanly: no broken phrasing,
+no leftover package-`model` wording, no stale cross-references.
+
+### Findings
+None.
+
+### Non-findings
+- **Round-1 non-findings still hold.** The changed Kotlin tree is identical to
+  the state reviewed in round 1 — imports all used, package declarations match
+  paths, `model/` and `capture/RegionExt.kt` gone with no empty directory or
+  dangling reference, and `FaweSelectionSource` self-explanatory without the
+  removed guard comment. Nothing in the doc/prompt edits touches a source file,
+  so none of that reasoning needs revisiting.
+- **The package-tree edit reads cleanly.** `docs/architecture.md:22-24` now lists
+  `UiChest.kt` under `export/` above `JsonExporter.kt`, and the description
+  `UiChest -> JSON string/file (atomic write; single ordering authority)` names
+  the real input instead of the removed `model` layer. The tree stays aligned
+  with the actual package and with the seam prose below it.
+- **The purity sentences read cleanly.** `docs/design.md:68` ("Pure logic (JSON
+  export/ordering) stays Bukkit-free where possible.") and the
+  `docs/architecture.md:55-64` reword keep their grammar and scope while naming
+  the surviving pure layer; `export` is used consistently as a package name.
+- **The agent-prompt edits are single-token and grammatical.**
+  `.opencode/agent/implementor.md:27` ("pure `export`"),
+  `.opencode/agent/architecture.md:21` ("No Bukkit leakage into `export`"), and
+  `.opencode/agent/tester.md:24` ("The `export` package should be Bukkit-free")
+  each read naturally and leave the surrounding rules intact.
+- **No leftover package-`model` wording anywhere I looked.** A grep over
+  `docs/architecture.md`, `docs/design.md`, `docs/data-format.md`,
+  `docs/fcp.md`, `docs/manual-test.md`, `AGENTS.md`, and `.opencode/agent/*.md`
+  finds only generic English uses — "capture-side model"
+  (`docs/architecture.md:67`), "## Kotlin model" (`docs/data-format.md:48`),
+  "## Orchestration model" (`AGENTS.md:37`) — none of which refers to the
+  removed package. `RegionExt` appears in none of them.
+- **Prior round-2 reports.** Concur with `docs/reviews/090/tester.md`,
+  `docs/reviews/090/correctness.md`, and `docs/reviews/090/architecture.md`
+  `## Round 2`: all three confirm the same clean-tree state and report no
+  finding in my scope; the architecture report owns the doc-staleness
+  resolution, which I do not re-report.

@@ -86,3 +86,44 @@ staleness the ticket did not finish: three docs still describe a `model` package
   (`docs/reviews/090/correctness.md`) reports:** concur. Their non-findings are
   about coverage and behaviour, which are outside my scope; nothing there
   overlaps with the doc-staleness work above.
+
+## Round 2
+### Verdict
+Ship. All three round-1 findings are resolved in `a320523`, the fixes introduce
+no new staleness, and the live docs now agree with the shipped layout and with
+each other. No source changed after round 1, so every round-1 non-finding still
+holds.
+
+### Findings
+None.
+
+### Non-findings
+- **Round-1 finding 1 resolved.** `docs/architecture.md:24` now reads
+  `UiChest -> JSON string/file (atomic write; single ordering authority)`. The
+  tree no longer names the removed `model` package, and the line is consistent
+  with the payload now listed at `:23` and the purity prose at `:60-62`.
+- **Round-1 finding 2 resolved.** `docs/design.md:68` now reads "Pure logic
+  (JSON export/ordering) stays Bukkit-free where possible." It drops both the
+  dead `model` layer and the Bukkit-coupled grouping math, so the stated purity
+  boundary matches `export/`.
+- **Round-1 finding 3 resolved.** `.opencode/agent/implementor.md:27`,
+  `.opencode/agent/architecture.md:21`, and `.opencode/agent/tester.md:24` now
+  say `export` only. Combined with `AGENTS.md:87` ("Keep `export` free of
+  Bukkit imports") and the architecture doc, the four places that describe the
+  purity seam are now mutually consistent; no prompt still teaches a `model`
+  package.
+- **No new staleness introduced by the fixes.** The `docs/architecture.md`
+  reword did not disturb the neighbouring entries or the seam prose; the
+  `design.md` reword keeps the sentence's grammar and scope; the prompt edits are
+  single-token substitutions that leave the surrounding rules intact.
+- **No `model` package references remain in live docs.** A grep across
+  `docs/architecture.md`, `docs/design.md`, `docs/data-format.md`, `docs/fcp.md`,
+  `docs/manual-test.md`, `AGENTS.md`, and `.opencode/agent/*.md` finds only
+  generic English uses: "capture-side model" (`architecture.md:67`), the
+  "## Kotlin model" heading (`data-format.md:48`), and "## Orchestration model"
+  (`AGENTS.md:37`). `RegionExt` appears in none of them, and
+  `grep -rn "uidesigner\.model" src/` is still empty. Historical tickets and
+  earlier-round review reports are correctly left untouched.
+- **Tester's and correctness's round-2 reports:** concur. They confirm the same
+  clean-tree state (`git diff a320523 -- src` is empty) and reach no finding that
+  overlaps this scope.

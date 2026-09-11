@@ -53,3 +53,30 @@ None.
   and nothing snapshots library internals or incidental structure. The
   acceptance criteria "no `model` package / imports `dev.rooster.region.BlockPos`"
   are compile-enforced and do not need a test.
+
+## Round 2
+### Verdict
+Ship. No source or test file changed after the round-1 review (working tree is
+clean at `a320523`; the round-2 deltas are `docs/architecture.md`,
+`docs/design.md`, `AGENTS.md` and `.opencode/agent/{implementor,architecture,tester}.md`
+only). I concur with all round-1 non-findings, which still hold verbatim, and I
+found no new test-quality finding in the round-1 commit.
+
+### Findings
+None.
+
+### Non-findings
+- **The round-2 doc deltas do not touch test scope.** `docs/architecture.md`
+  and `docs/design.md` restate the package move and the library-backed
+  `worldEditSelection()`/`Region.blockAt`, which are the same facts my round-1
+  non-findings were based on; they change no test file, fixture, or assertion.
+- **`.opencode/agent/tester.md:24` now reads `export` instead of `model`/`export`.**
+  That is consistent with the package layout the round-1 commit established and
+  with my own scope; it does not alter any test or the harness.
+- **Round-1 non-findings are unchanged and still stand.** The moved
+  `export/UiChestTest.kt`, the `BlockPos` ordering coverage in
+  `JsonExporterTest.kt:40-67`, the indirect `Region.blockAt` coverage, the
+  `FaweSelectionSource` cross-world gap tracked by `MT-005`, the `DoubleChest`
+  holder limit tracked by `MT-003`, and the absence of brittle/excessive tests
+  all remain true because the source and test trees are identical to the state
+  reviewed in round 1. No re-reporting or new manual-test entry is needed.
