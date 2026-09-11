@@ -14,7 +14,7 @@ goes through the review pipeline in `docs/workflow.md`.
 | [040](040-double-chest-grouping.md) | Double-chest grouping | MVP | 030 | done |
 | [050](050-chest-naming.md) | `/chest-edit` naming | MVP | 000 | done |
 | [060](060-export-command.md) | `/uidesigner save` export command | MVP | 010, 020, 030, 040, 050 | done |
-| [070](070-ux-polish.md) | Command UX polish | Polish | 060 | todo |
+| [070](070-ux-polish.md) | Command UX polish | Polish | 060 | done |
 
 ## Template
 
