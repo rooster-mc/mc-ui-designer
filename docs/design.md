@@ -77,6 +77,11 @@ Out of scope (backlog):
   `/chest-edit clear` (case-insensitive) is
   reserved for removal and blank input also clears, so a literal name "clear"
   is unreachable.
+- **One half selected:** a chest whose partner half is outside the selection is
+  exported as a single 3-row chest from the selected half only. The selection
+  is authoritative, so the grouper never reads an unselected half. A merged
+  double reads the shared 54-slot inventory once and uses the lower half
+  position as canonical.
 
 ## Naming
 

@@ -60,13 +60,41 @@ uidesigner/
   MockBukkit cannot form a real double chest and `ChestStateMock.getBlockInventory()`
   returns `getInventory()`, so tests only pin that adjacent chest blocks yield
   separate 27-slot entries; the `blockInventory` vs shared-`inventory`
-  distinction is verified on the dev server and by 040.
+  distinction still needs the dev server (040's holder-route tests fake the
+  shared inventory).
 - **Grouper input contract (040/060).** `ChestContent` stays `position + items`
   only. `DoubleChestGrouper` receives the `Region` alongside the
   `List<ChestContent>`, so it can reach each block via
-  `region.world.getBlockAt(position.x, position.y, position.z)` for
-  `DoubleChest`-holder detection; 060 reads chest names from the same blocks
-  with `ChestNamer.nameOf(block)`.
+  `region.world.getBlockAt(position.x, position.y, position.z)`; 060 reads chest
+  names from the same blocks with `ChestNamer.nameOf(block)`.
+- **Double detection (040).** The holder route is primary:
+  `(block.state as? Chest)?.inventory?.holder as? DoubleChest`, then
+  `DoubleChest.leftSide`/`rightSide` give the two half positions and the merged
+  content is read once from the shared 54-slot `holder.inventory`. Block-data
+  geometry (`org.bukkit.block.data.type.Chest` `LEFT`/`RIGHT` + `getFacing()`;
+  partner = the facing rotated clockwise for `LEFT`, counter-clockwise for
+  `RIGHT`) is the fallback for unlinked/mismatched halves, because MockBukkit
+  4.116.1 cannot form a real `DoubleChest` (adjacent chests stay single and
+  `ChestStateMock`'s inventory holder is the state itself). The fallback only
+  merges when the partner block is the complementary half (same facing, opposite
+  `LEFT`/`RIGHT`) and has not already been emitted; it then concatenates the two
+  halves' captured 27-slot lists (lower position first) rather than trusting
+  `Chest.inventory`, which is the 27-slot block inventory when the pair is
+  unlinked. `rows` is derived from the item list size (`size / 9`, required to be
+  a positive multiple of 9) for both routes, so a 27-item list can never be
+  stamped as 6 rows. Consumed positions are checked before merging and extended
+  on emit, so no chest is emitted twice. Both routes are unit tested: the holder
+  route with a test-injected fake `DoubleChest`, the fallback with
+  `ChestDataMock` orientations in both input orders. The fallback's
+  clockwise/counter-clockwise rule is hand-checked against vanilla
+  `ChestBlock.getConnectedDirection`, but MockBukkit cannot verify it against
+  real chest geometry; that needs the dev server.
+- **Only one half selected (040).** The selection is authoritative, so a chest
+  whose partner half is absent from `contents` stays a single 3-row entry built
+  from that half's own 27 captured slots; the grouper never reads the
+  unselected half. Consumed positions keep a merged double's halves from being
+  emitted twice. The grouper returns `UiChest` with `name = null` (naming is
+  060) and does not order; `JsonExporter` remains the ordering authority.
 - **Chest predicate duplication.** `ChestScanner` and `ChestNamer` each define
   their own chest-material check; this is a deliberate carry-over until a third
   consumer appears, then extract one shared `isChest`.

@@ -1,6 +1,6 @@
 ---
 name: Double-chest grouping
-status: todo
+status: in-progress
 parent: MVP
 depends-on: [030]
 reviewers: [tester, correctness]
@@ -37,3 +37,8 @@ single chests stay 3 rows.
   block-data geometry if needed. Document which was used.
 - "Only one half selected" is ambiguous; decide (treat as single, or error) and
   document the choice in the ticket's review notes.
+- Implemented decision: holder route is primary; block-data geometry is the
+  tested fallback because MockBukkit cannot form a real `DoubleChest`. A
+  selection containing only one half is treated as a single 3-row entry from
+  the selected half (the selection is authoritative). See
+  `docs/architecture.md` and `docs/design.md`.
