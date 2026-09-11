@@ -71,3 +71,94 @@ findings are low-severity readability nits. No structural or formatting issues.
 - **Deferred command.** Exposing `reloadConfiguration()` as the seam and leaving
   the literal command out is consistent with the ticket note and does not hurt
   readability.
+
+## Round 2
+
+### Verdict
+Ship. All three round-1 findings are resolved: `writeDefaultOutputIfMissing()`
+plus the `wroteDefault` local makes the write-through explicit, the plugin test
+uses `UiDesignerConfig.OUTPUT_FILE_KEY`, and MockBukkit setup/teardown now lives
+in `@BeforeEach`/`@AfterEach`. The malformed-file guard added for correctness
+makes `reloadConfiguration()` denser, and two small naming/flow nits in it are
+worth a final polish, but nothing blocks the ticket.
+
+### Issues
+
+#### 1. `readable` names the wrong thing and hides a double negative (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/UiDesignerPlugin.kt:20-22,27-31`
+- Problem: `readable` is `!configFile.isFile || load(...).isSuccess`, so it is
+  `true` when the file is **absent** — precisely the case where nothing was read.
+  A reader following the name expects "the file parsed", then has to invert
+  `!configFile.isFile` to understand why a missing file counts as readable, and
+  only then sees that the flag really gates "safe to overwrite the file". The
+  name and the negated term point away from the actual meaning.
+- Suggested fix: name the concept, not the mechanism, e.g.
+  `val fileIsAbsentOrParses = !configFile.isFile || ...` or
+  `val canOverwriteFile = ...`, and use it in the branch below. Keeping the
+  pre-parse is fine; the name should carry the *why* so no comment is needed.
+
+#### 2. `writeDefaultOutputIfMissing()` also rewrites a blank value (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/config/UiDesignerConfig.kt:16-21`
+- Problem: the method returns `true` (and writes the default) when the key is
+  present but blank/whitespace (`isNullOrBlank()`), yet the name says only
+  "if missing". A reader trusting the name would expect a present-but-blank key
+  to be left alone; the blank case is only discoverable by reading the condition
+  or the `blank key is written back` test. The round-1 rename fixed the old
+  `applyDefaults()` problem but did not track the behaviour added with it.
+- Suggested fix: rename to cover both cases, e.g.
+  `writeDefaultOutputIfBlank()` or `writeDefaultOutputIfUnset()` (blank is the
+  superset here), or keep the name and document the blank rule in the ticket —
+  the former is one word and removes the mismatch.
+
+#### 3. Repeated `wroteDefault` in the `if`/`else if` (severity: low)
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/UiDesignerPlugin.kt:27-31`
+- Problem: `if (wroteDefault && readable) ... else if (wroteDefault) ...` repeats
+  the guard, so the two mutually exclusive outcomes of `wroteDefault` are split
+  across an `&&` and a fall-through. Nesting makes the "wrote a default, now
+  save or warn" story linear and lets the reader see that the branch is only
+  about `readable`. (Correctness round 2 suggests the same shape for its own
+  reason; the readability win is the flat, non-duplicated condition.)
+- Suggested fix:
+  ```kotlin
+  if (wroteDefault) {
+      if (readable) saveConfig() else logger.warning("config.yml could not be read; leaving it unchanged")
+  }
+  ```
+  or keep the flat form with an explicit `!readable` in the `else if`.
+
+### Non-issues
+- **Round-1 #1 resolved.** The call site now reads
+  `val wroteDefault = loaded.writeDefaultOutputIfMissing()` and branches on the
+  captured boolean, so the mutation/predicate confusion is gone. The method name
+  mismatch in issue 2 is a new, smaller nit, not a regression of the old one.
+- **Round-1 #2 resolved.** `UiDesignerPluginTest.packagedOutputFile()` imports
+  `UiDesignerConfig` and uses `OUTPUT_FILE_KEY`; no key string literal remains.
+- **Round-1 #3 resolved.** `@BeforeEach setUp()` / `@AfterEach tearDown()` hold
+  the MockBukkit calls; every test body now starts at its own assertion and no
+  `try/finally` remains.
+- **Formatting / ktlint.** By eye: all changed lines are under the 100-column
+  limit, four-space indentation throughout, no tabs or trailing whitespace, and
+  no trailing commas that `.editorconfig` would reject (both trailing-comma
+  rules are disabled). The wrapped boolean at `UiDesignerPlugin.kt:20-22` follows
+  the expected continuation indent. No formatter changes required.
+- **Comments.** No new comments; only the pre-existing MockBukkit note remains.
+  The pre-parse in `reloadConfiguration()` is a genuine non-obvious *why*, but
+  issue 1's rename can carry that meaning without a comment, which fits the
+  repo's no-comments default.
+- **Test readability.** `packagedConfigText()` / `packagedOutputFile()` are
+  unchanged in shape and still clear; `contains("\${")` correctly escapes the
+  dollar to match a literal `${` token and is idiomatic for the assertion. The
+  `config(...)` helper in `UiDesignerConfigTest` keeps each test to one arrange
+  line. `reload leaves a malformed config file unchanged` reads as a direct
+  regression test for the guard.
+- **File hygiene.** `UiDesignerConfig.kt` (35 lines) still has one
+  responsibility and no dead code; `UiDesignerPlugin.kt` (38 lines) stays a thin
+  lifecycle/wiring class. The `loaded` / `wroteDefault` locals earn their names.
+- **Docs.** `docs/design.md` (Gradle property `uiDesigner.defaultOutput` filtered
+  into `config.yml`) and `docs/architecture.md` (`config/UiDesignerConfig.kt`
+  typed view; data-flow sink `config.outputFile`) remain accurate and neither
+  states the literal default, so the `gradle.properties` change invalidates
+  nothing. Relative-to-data-folder resolution is not documented, but that is
+  pre-existing and not contradicted. `/uidesigner reload` stays a 060
+  deliverable; the seam is the only thing 010 exposes, as the ticket note
+  intends.

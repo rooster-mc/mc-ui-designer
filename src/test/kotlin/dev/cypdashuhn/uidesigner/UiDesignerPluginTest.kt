@@ -41,6 +41,7 @@ class UiDesignerPluginTest {
     @Test
     fun `packaged config has the Gradle default substituted`() {
         assertFalse(packagedConfigText().contains("\${"))
+        assertFalse(packagedOutputFile().isBlank())
     }
 
     @Test
@@ -81,6 +82,7 @@ class UiDesignerPluginTest {
         plugin.reloadConfiguration()
 
         assertEquals(malformed, written.readText())
+        assertFalse(plugin.config.isSet(UiDesignerConfig.OUTPUT_FILE_KEY))
     }
 
     private fun packagedConfigText(): String =

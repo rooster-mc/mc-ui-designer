@@ -17,16 +17,15 @@ open class UiDesignerPlugin : JavaPlugin() {
 
     fun reloadConfiguration() {
         val configFile = dataFolder.resolve("config.yml")
-        val readable =
+        val canOverwriteFile =
             !configFile.isFile ||
                 runCatching { YamlConfiguration().load(configFile) }.isSuccess
 
         reloadConfig()
         val loaded = UiDesignerConfig(config, dataFolder.toPath())
-        val wroteDefault = loaded.writeDefaultOutputIfMissing()
-        if (wroteDefault && readable) {
-            saveConfig()
-        } else if (wroteDefault) {
+        if (canOverwriteFile) {
+            if (loaded.writeDefaultOutputIfBlank()) saveConfig()
+        } else {
             logger.warning("config.yml could not be read; leaving it unchanged")
         }
         uiConfig = loaded

@@ -55,21 +55,40 @@ class UiDesignerConfigTest {
     }
 
     @Test
+    fun `non-string output file resolves to the default in the data folder`() {
+        val config = config()
+        config.set(UiDesignerConfig.OUTPUT_FILE_KEY, listOf("design.json"))
+        val subject = UiDesignerConfig(config, dataFolder)
+
+        assertEquals(dataFolder.resolve("design.json"), subject.outputFile)
+    }
+
+    @Test
     fun `missing key is written back from the default`() {
         val config = config()
         val subject = UiDesignerConfig(config, dataFolder)
 
-        assertTrue(subject.writeDefaultOutputIfMissing())
+        assertTrue(subject.writeDefaultOutputIfBlank())
         assertTrue(config.isSet(UiDesignerConfig.OUTPUT_FILE_KEY))
         assertEquals("design.json", config.getString(UiDesignerConfig.OUTPUT_FILE_KEY))
     }
 
     @Test
     fun `blank key is written back from the default`() {
-        val config = config(outputFile = "")
+        val config = config(outputFile = "   ")
         val subject = UiDesignerConfig(config, dataFolder)
 
-        assertTrue(subject.writeDefaultOutputIfMissing())
+        assertTrue(subject.writeDefaultOutputIfBlank())
+        assertEquals("design.json", config.getString(UiDesignerConfig.OUTPUT_FILE_KEY))
+    }
+
+    @Test
+    fun `non-string key is written back from the default`() {
+        val config = config()
+        config.set(UiDesignerConfig.OUTPUT_FILE_KEY, listOf("design.json"))
+        val subject = UiDesignerConfig(config, dataFolder)
+
+        assertTrue(subject.writeDefaultOutputIfBlank())
         assertEquals("design.json", config.getString(UiDesignerConfig.OUTPUT_FILE_KEY))
     }
 
@@ -78,7 +97,7 @@ class UiDesignerConfigTest {
         val config = config(outputFile = "custom.json")
         val subject = UiDesignerConfig(config, dataFolder)
 
-        assertFalse(subject.writeDefaultOutputIfMissing())
+        assertFalse(subject.writeDefaultOutputIfBlank())
         assertEquals("custom.json", config.getString(UiDesignerConfig.OUTPUT_FILE_KEY))
     }
 

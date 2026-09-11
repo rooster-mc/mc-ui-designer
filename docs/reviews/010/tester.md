@@ -77,3 +77,92 @@ actually substituted into the packaged `config.yml`, so a broken
 - Plugin tests derive the expected default from the packaged resource instead of
   hardcoding `design.json`, which keeps them resilient if the Gradle default
   changes.
+
+## Round 2
+
+### Verdict
+Ship. All four round-1 findings are resolved and the three tests that guard the
+round-1 fixes (Gradle token substitution, malformed-config non-clobber, blank
+fallback) are genuine regression tests, not tautologies. Two low-severity
+residual gaps remain in the edges of the new token/blank assertions; neither
+blocks the ticket.
+
+### Issues
+
+#### 1. Substitution test cannot see a blank Gradle property (severity: low)
+- Location: `src/test/kotlin/dev/cypdashuhn/uidesigner/UiDesignerPluginTest.kt:41-44`,
+  `src/main/kotlin/dev/cypdashuhn/uidesigner/config/UiDesignerConfig.kt:23-25`
+- Problem: `packaged config has the Gradle default substituted` only asserts
+  the packaged resource no longer contains `${`. If `uiDesigner.defaultOutput`
+  were set to the empty string, `ReplaceTokens` would still substitute (no token
+  left), the test passes, and the packaged default becomes `""`.
+  `defaultOutputFile()` only guards against `null` (`config.defaults?.getString(...) ?: error(...)`),
+  so a blank default is returned as a valid value; `resolve("")` then yields the
+  data folder itself — the exact failure mode round 1 flagged for blank user
+  values, now reachable from the build. The existing plugin-level tests still
+  pass in that scenario because both the expected (`packagedOutputFile()`) and
+  actual paths collapse to the data folder.
+- Suggested fix: add one cheap assertion that the substituted value is usable,
+  e.g. `assertFalse(packagedOutputFile().isBlank())` (or `assertEquals("design.json", packagedOutputFile())`).
+  If the blank-default case is considered in scope, `defaultOutputFile()` should
+  treat blank like missing (`?.takeIf { it.isNotBlank() } ?: error(...)`) so the
+  error path is symmetric with the user-value path.
+
+#### 2. Blank write-back test only pins the empty-string case (severity: low)
+- Location: `src/test/kotlin/dev/cypdashuhn/uidesigner/config/UiDesignerConfigTest.kt:67-74`,
+  `src/main/kotlin/dev/cypdashuhn/uidesigner/config/UiDesignerConfig.kt:16-21`
+- Problem: `blank key is written back from the default` uses `outputFile = ""`.
+  That passes whether the guard is `isNullOrBlank()` (current) or `isEmpty()`,
+  so the whitespace branch of the write-back path is not pinned. The getter
+  test at `UiDesignerConfigTest.kt:21-26` does cover `"   "`, but only for
+  `outputFile`, not for `writeDefaultOutputIfMissing()`.
+- Suggested fix: use `"   "` in the write-back test (or add one case). With an
+  `isEmpty()` regression it would return `false` and the `assertTrue` would fail,
+  which is the behaviour we want to protect.
+
+### Non-issues
+- **Round-1 #1 (Gradle default never asserted) — resolved.** The token test at
+  `UiDesignerPluginTest.kt:41-44` fails if the `ReplaceTokens` filter is not
+  applied or the token names are wrong, which is the failure mode claimed. It is
+  an intrinsic property of the packaged resource, not a re-read of the same
+  expected value, so it is not self-consistent. Issue 1 above is only the
+  empty-property edge beyond the original finding.
+- **Round-1 #2 (missing-defaults error path) — resolved.** `UiDesignerConfigTest.kt:28-33`
+  builds `UiDesignerConfig(YamlConfiguration(), dataFolder)` with no defaults and
+  asserts `IllegalStateException`. The getter genuinely reaches `error(...)`:
+  `config.getString` is null and `config.defaults` is null. Good.
+- **Round-1 #3 (repeated MockBukkit boilerplate) — resolved.** `@BeforeEach` /
+  `@AfterEach` at `UiDesignerPluginTest.kt:14-22` replace the four
+  `try/finally` blocks, so teardown can no longer be forgotten.
+- **Round-1 #4 (Unix-shaped absolute test) — resolved.**
+  `UiDesignerConfigTest.kt:49-55` now derives the absolute path via
+  `Path.of("").toAbsolutePath().resolve("shop.json")`, so it holds on any OS.
+- **Malformed-config non-clobber is a real test, not a tautology.**
+  `UiDesignerPluginTest.kt:74-84` writes invalid YAML, calls
+  `reloadConfiguration()`, and asserts the file is byte-identical. I verified the
+  mechanics against paper-api `26.2.build.111` sources: the pre-check uses the
+  instance `FileConfiguration.load(File)`, which *throws*
+  `InvalidConfigurationException` (`FileConfiguration.java:123-160`,
+  `YamlConfiguration.java:98-123`), so `readable` is false; meanwhile
+  `JavaPlugin.reloadConfig()` uses the static
+  `YamlConfiguration.loadConfiguration(File)`, which swallows the parse error and
+  returns an empty config with defaults (`YamlConfiguration.java:303-319`,
+  `JavaPlugin.java:170-180`). That makes `writeDefaultOutputIfMissing()` return
+  true, so without the `readable` gate `saveConfig()` would overwrite the file and
+  the assertion would fail. The test therefore exercises the exact fixed branch.
+  (It would also error rather than silently pass if `reloadConfig()` ever threw.)
+- **Blank value fallback is genuinely covered.** `UiDesignerConfigTest.kt:21-26`
+  uses whitespace (`"   "`) and asserts the default path; pre-fix this resolved
+  to a directory under the data folder, so the assertion is discriminating. The
+  write-back branch is covered by `:67-74` (see issue 2 for the residual edge).
+- **No excessive or brittle new tests.** The added cases each map to a distinct
+  branch (token filter, malformed reload, blank getter, blank write-back,
+  missing defaults). `packaged config has the Gradle default substituted` runs
+  inside the MockBukkit-mocked class unnecessarily, but the cost is trivial and
+  not worth a separate resource test.
+- **Deferral still sound.** The literal `/uidesigner reload` command is listed
+  in `docs/tasks/060-export-command.md:14,29`; `UiDesignerPlugin.reloadConfiguration()`
+  remains the seam and is exercised end-to-end at `UiDesignerPluginTest.kt:46-84`.
+- **Layer placement unchanged and correct.** Pure resolution/fallback logic
+  stays in plain-JUnit `UiDesignerConfigTest`; lifecycle/reload stays on
+  MockBukkit in `UiDesignerPluginTest`.

@@ -8,17 +8,20 @@ class UiDesignerConfig(
     private val dataFolder: Path,
 ) {
     val outputFile: Path
-        get() {
-            val raw = config.getString(OUTPUT_FILE_KEY)?.takeIf { it.isNotBlank() }
-            return resolve(raw ?: defaultOutputFile())
-        }
+        get() = resolve(explicitOutputFile() ?: defaultOutputFile())
 
-    fun writeDefaultOutputIfMissing(): Boolean {
-        val present = config.isSet(OUTPUT_FILE_KEY)
-        if (present && !config.getString(OUTPUT_FILE_KEY).isNullOrBlank()) return false
+    fun writeDefaultOutputIfBlank(): Boolean {
+        if (explicitOutputFile() != null) return false
         config.set(OUTPUT_FILE_KEY, defaultOutputFile())
         return true
     }
+
+    private fun explicitOutputFile(): String? =
+        if (!config.isSet(OUTPUT_FILE_KEY)) {
+            null
+        } else {
+            (config.get(OUTPUT_FILE_KEY) as? String)?.takeIf { it.isNotBlank() }
+        }
 
     private fun defaultOutputFile(): String =
         config.defaults?.getString(OUTPUT_FILE_KEY)
