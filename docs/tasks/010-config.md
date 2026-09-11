@@ -1,6 +1,6 @@
 ---
 name: Config loading and default output path
-status: todo
+status: done
 parent: MVP
 depends-on: [000]
 reviewers: [tester, correctness, readability]
@@ -36,3 +36,11 @@ overridable and a sane default baked in at build time.
   `plugin.config.getString(...)` calls.
 - Consider exposing the default via a small generated `BuildConfig` object if
   resource filtering proves awkward.
+- The literal `/uidesigner reload` command is deferred to ticket 060, which owns
+  `UiDesignerCommand` (`save`/`reload`/`help`); it must call
+  `UiDesignerPlugin.reloadConfiguration()`. 010 exposes and tests that seam, so
+  AC2's command half lands with 060.
+- The Gradle default was changed from `plugins/UiDesigner/design.json` to
+  `design.json` because relative paths now resolve against the plugin data
+  folder; the effective location (`<server>/plugins/UiDesigner/design.json`) is
+  unchanged.
