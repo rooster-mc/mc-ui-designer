@@ -19,7 +19,7 @@ goes through the review pipeline in `docs/workflow.md`.
 | [090](090-consolidate-model.md) | Use rooster-region BlockPos and consolidate model | MVP | 080 | done |
 | [100](100-adopt-rooster-commands.md) | Adopt rooster-commands and drop command-layer accidents | Polish | 090 | done |
 | [110](110-todo-hygiene.md) | TODO-sweep hygiene and exporter robustness | Polish | 100 | done |
-| [120](120-backlog-rooster-region-scanner.md) | Backlog: ChestScanner split into rooster-region | Polish | — | backlog |
+| [120](120-consume-rooster-region-enumeration.md) | Consume rooster-region lazy block enumeration | Polish | — | todo |
 | [130](130-consume-rooster-commands-gaps.md) | Consume rooster-commands root executor and suggestion dedupe | Polish | 100 | done |
 
 ## Template
