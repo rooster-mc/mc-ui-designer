@@ -1,6 +1,6 @@
 ---
 name: Adopt rooster-commands and drop command-layer accidents
-status: todo
+status: in-progress
 parent: Polish
 depends-on: ["090"]
 reviewers: [correctness, architecture, readability]
