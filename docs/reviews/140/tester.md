@@ -73,3 +73,68 @@ asserted in a loaded chunk — so ship with those fixes.
 - No excessive or brittle tests found. Assertions use substrings for
   user-facing text and data-class equality for outcomes; the four clipped
   grouper tests are the requested matrix, not duplication.
+
+## Round 2
+
+### Verdict
+Both round-1 findings are addressed: fail-closed with a valid chest present is
+now exercised through `group` (including multi-clip accumulation), and the
+not-captured test now sits in an unloaded chunk. One fidelity gap remains in
+that reworked test — nothing is placed at the partner position, so the outcome
+still does not depend on the chunk being unloaded. Ship with that small
+addition.
+
+### Findings
+
+#### 1. The unloaded-chunk test still doesn't make the outcome depend on chunk-skipping
+- Location: `src/test/kotlin/dev/cypdashuhn/uidesigner/commands/UiDesignerCommandTest.kt:255-268`
+- Problem: The half now sits at `(15, 0, 0)` with partner `(16, 0, 0)` and the
+  region spans both, but no block is placed at `(16, 0, 0)`. `ChestScanner`
+  would therefore skip it as air even if chunk `(1,0)` were loaded, so the test
+  reaches `partnerInsideSelection = true` by absence of a captured chest, not by
+  `loadedBlockPositions` skipping an unloaded chunk. A regression that stopped
+  skipping unloaded chunks (e.g. switching to `region.blockPositions`) would
+  still pass this test because there is nothing there to capture. The distinct
+  message branch is exercised; the stated cause is not.
+- Suggested fix: place the complementary RIGHT half at `(16, 0, 0)` facing
+  NORTH and assert `world.isChunkLoaded(1, 0)` is false before the save (the
+  pattern `ChestScannerTest` already uses). With a real partner in the unloaded
+  chunk, the clip only occurs because the scan skipped it. Optionally load the
+  chunk and save again to assert it then exports one 6-row chest.
+
+### Non-findings
+- Concur with the fix for round-1 finding 1. `save aborts on clipped halves even
+  when a valid chest is present` (`UiDesignerCommandTest.kt:187-216`) puts a
+  valid single chest at `(2,0,0)` plus two clipped halves and asserts the exact
+  two-element `ClippedChests` list, so `group`'s accumulation of several clipped
+  halves is now exercised end-to-end (not just through `clippedChestsMessage`),
+  along with `exporterCalls == 0` and no file. Not vacuous.
+- Concur with the fix for round-1 finding 2 in substance. The setup is now a
+  genuine coordinate in an unloaded chunk, so the "chunk is not loaded" wording
+  is no longer asserted for a loaded chunk; the remaining point above is
+  narrower — mechanism rather than wording.
+- The copper tests are valid and non-vacuous on MockBukkit. MockBukkit ships
+  `tags/blocks/copper_chests.json`, `ServerMock`'s constructor loads those tags,
+  and `BlockStateMockFactory` maps `Tag.COPPER_CHESTS` to `ChestStateMock`, so
+  `block.state as? Chest` succeeds for `Material.COPPER_CHEST` and the variants
+  and `ChestDataMock` accepts the material.
+  `ChestScannerTest.copper chest variants are captured` fails if the scanner
+  predicate drops copper; `ChestNamerTest.copper chests are chests and
+  round-trip a name` pins the namer predicate and a real set/read/clear cycle;
+  `save aborts on a clipped copper double chest` pins clipping for copper. No
+  manual entry is needed for copper — unlike the real `DoubleChest` holder path,
+  this is fully exercised by the bundled tag data.
+- The stale round-1 assertion (`chunk is not loaded` while the chunk was
+  loaded) is gone, and the dispatch message tests now match the reworded ux
+  branch (`shrink the selection`).
+- Layer choice for the new tests is right: one copper test per layer (scanner,
+  namer, command) rather than one per variant; the exact `ClippedHalf` list
+  equality and substring message checks remain appropriate, with no brittle
+  full-message snapshots.
+- The `save aborts on a clipped copper double chest` test relies on
+  `exporterCalls == 0` and does not use a `@TempDir`/no-file assertion, but the
+  no-file guarantee is pinned by the `@TempDir` tests for the regular chest and
+  the path is the same; no extra test needed.
+- The `rest > 1` pluralisation ("N more chests are also clipped") is only
+  covered at `rest == 1`, but it is a trivial branch in a pure function and
+  `rest == 0` is covered by the single-clip tests; not worth a test.

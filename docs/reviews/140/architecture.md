@@ -89,3 +89,57 @@ extraction, and one `docs/design.md` sentence the change left half-updated.
   return its own result or a widened `GroupResult`, and the existing
   `chests`/`clipped` distinction maps cleanly onto additional result states.
   Nothing here is over-generalised for a need that does not exist.
+
+## Round 2
+
+### Verdict
+
+Ship. Both round-1 findings are resolved as asked, and the copper extension the
+implementor added (in response to correctness) is a clean widening of the same
+predicate: it stays behind the `capture/`/`naming/` boundary, reuses Bukkit's
+`Tag.COPPER_CHESTS` rather than hand-listing variants, and is reflected in the
+living docs. No new architecture or doc-staleness findings.
+
+### Findings
+
+No new findings.
+
+### Non-findings
+
+- **Round-1 finding 1 (half-position duplication) — concur, resolved.**
+  `DoubleChest.halfPositions()` is defined once at
+  `DoubleChestGrouper.kt:158-160` and used by `partnerOf` (`:95`) and `halvesIn`
+  (`:154`). The pre-existing third copy in `ChestNamer.chestsOf`
+  (`ChestNamer.kt:47-48`) is left in place, which is what I recommended to avoid
+  a `naming -> capture` dependency for three lines.
+- **Round-1 finding 2 (`design.md` lone-half implication) — concur, resolved.**
+  `docs/design.md:98-101` now reads "the exporter likewise only sees loaded
+  halves and, since 140, fails closed when a double chest's other half is
+  missing (see below)", and the "One half selected" decision at `:110-115`
+  states the abort. The sentence no longer reads as tolerance of a lone half.
+- **Copper predicate is documented and stays in its layer.** The scanner check
+  (`ChestScanner.kt:23-24`) and `ChestNamer.isChest`
+  (`ChestNamer.kt:13-16`) use `Tag.COPPER_CHESTS`; both are in
+  `capture/`/`naming/`, so no Bukkit leaks toward `export/`. `docs/design.md:116-118`
+  (new chest-materials decision) and `docs/architecture.md:135-137,141-145` match
+  the code, and the "eight variants" count is right (four oxidation levels,
+  waxed and unwaxed).
+- **Chest-predicate duplication remains a documented deferral, not new drift.**
+  `docs/architecture.md:141-145` still records it as a deliberate carry-over
+  "until a third consumer appears". Copper changed both copies in the same
+  commit and they are semantically identical, so the deferral still holds; the
+  change did not quietly add a third consumer. (When it is extracted, the tag
+  membership, not the two-material set, is the part worth centralising.)
+- **Doc sweep after the copper and wording changes.** No living doc (outside
+  `docs/reviews/` and historical `docs/tasks/`) still claims the scanner accepts
+  only `CHEST`/`TRAPPED_CHEST`, or that a clipped half exports as a 3-row chest.
+  `docs/data-format.md` is unaffected: the schema and the 3-/6-row rule are
+  material-independent, and the clipped path still writes no file.
+  `docs/manual-test.md:22` MT-011 stays correct for copper because a copper
+  double exercises the same block-state paths; it needs no copper-specific
+  entry.
+- **Seams unchanged and intact.** `GroupResult`/`ClippedHalf` stay in
+  `capture/`; the fail-closed decision stays in `UiDesignerCommand` behind
+  `SaveOutcome.ClippedChests`; `JsonExporter` remains the ordering authority. The
+  data-flow diagram (`docs/architecture.md:188-194`) still matches
+  `DoubleChestGrouper.group` returning `GroupResult`.

@@ -117,3 +117,71 @@ message).
   message branches. The tests are not vacuous with respect to the new paths.
 - **Threading.** `save` and the grouper run from the command executor on the main
   thread; the new code adds no async file IO and no cross-thread Bukkit access.
+
+## Round 2
+### Verdict
+Ship. I concur with the round-1 correctness finding's resolution: `CHEST`/
+`TRAPPED_CHEST` plus `Tag.COPPER_CHESTS` covers all eight copper variants, and
+the copper blocks really are `Chest`/`ChestData` and can form doubles, so the
+clipped-double guarantee now reaches them. The holder/geometry partner logic is
+behaviourally unchanged by the `halfPositions()`/`findClippedHalf` refactors. No
+new in-scope findings.
+
+### Findings
+None.
+
+### Non-findings
+- **Concur with the round-1 copper finding; it is fixed.** `Tag.COPPER_CHESTS`
+  is the block-registry tag (`REGISTRY_BLOCKS`,
+  `minecraft:copper_chests` in `paper-api-26.2.build.111-stable` `Tag.java`), which
+  is the right registry for `block.type` in both `ChestScanner.isChestMaterial`
+  and `ChestNamer.isChest` (not `Tag.ITEMS_COPPER_CHESTS`). I extracted
+  `data/minecraft/tags/block/copper_chests.json` from
+  `run/cache/mojang_26.2.jar`'s inner `server-26.2.jar`: it contains exactly the
+  eight variants (`copper_chest`, `exposed_`, `weathered_`, `oxidized_` and the
+  four `waxed_*`), matching the eight `Material` constants. So membership is
+  complete, not just the two variants the new scanner test happens to place.
+- **`Chest`/`ChestData` coverage holds for every copper variant.**
+  `Material.COPPER_CHEST` (and each sibling) is `(-1, Chest.class)` where the
+  import is `org.bukkit.block.data.type.Chest`, so `block.blockData as? ChestData`
+  succeeds; there is no separate `CopperChest` block-state class in the API, so
+  `block.state as? Chest` succeeds too, and NMS
+  `CopperChestBlock extends ChestBlock` means `DoubleChest` linking and the
+  inherited `getConnectedDirection` geometry apply unchanged. The holder route
+  (`holder.halfPositions()`, `holder.inventory.contents`) and the geometry route
+  therefore work for copper exactly as for `CHEST`.
+- **No regression for `CHEST`/`TRAPPED_CHEST`.** `CHEST_MATERIALS` remains the
+  explicit `setOf(CHEST, TRAPPED_CHEST)` and is tested first (`||` short-circuits
+  before the tag lookup), and `ChestNamer.isChest` keeps its two explicit
+  equality checks. The tag only adds copper variants, so the existing
+  scanner/namer matrices are unaffected.
+- **Partner logic unchanged after the refactors.** `findClippedHalf`
+  (`DoubleChestGrouper.kt:80-88`), `partnerOf` (`:90-101`), `geometryPartner`
+  (`:120-123`) and `partnerOffset` (`:162-170`) are the same expressions as the
+  round-1 revision; `halfPositions()` (`:158-160`) is a pure inline of the old
+  `listOfNotNull(leftSide as? Chest, rightSide as? Chest).map { BlockPos(it.x,
+  it.y, it.z) }`, now used symmetrically by `partnerOf` and `halvesIn` (`:154`).
+  Re-ran the round-1 checks: LEFT = clockwise / RIGHT = counter-clockwise matches
+  vanilla for N/S/E/W, the holder branch returns the side that is not `position`,
+  and `findClippedHalf` still only classifies when the computed partner is absent
+  from `byPosition` (present-but-mismatched/consumed stays a single). No position
+  changed.
+- **The copper command test exercises the whole path.** `save aborts on a
+  clipped copper double chest` builds a copper `LEFT`/NORTH half through
+  `ChestScanner.scan` (the tag predicate + `state as? Chest`), runs the grouper,
+  and asserts `ClippedChests` with `partnerInsideSelection = false` and zero
+  exporter calls, so the fix is covered end-to-end at the outcome level, not just
+  in `ChestScannerTest`.
+- **Round-1 tester/UX fixes are behaviour-neutral for my scope.** The new
+  `save aborts on clipped halves even when a valid chest is present` pins that a
+  surviving single is still not exported (the fail-closed branch precedes
+  `named`/`configProvider()`/`exporter`, `UiDesignerCommand.kt:89-90`); moving the
+  unloaded-chunk test to `(15,0,0)`/`(16,0,0)` makes `partnerInsideSelection=true`
+  come from a genuinely unloaded chunk `(1,0)` instead of air in a loaded chunk;
+  and the expanded message is still `Messages.errorColor` with the same
+  short-circuit. No data-format or integration contract changed.
+- **`clipped.first()` remains safe, and item ordering/canonical position are
+  untouched.** The change is confined to predicates, a rename and a helper
+  extraction; `orderedItems` (`:139-148`) and
+  `uiChest(match.items, match.positions.min())` (`:45`) are byte-identical to
+  round 1.
