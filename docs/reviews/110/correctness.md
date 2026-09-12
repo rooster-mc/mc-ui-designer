@@ -17,3 +17,22 @@ None.
 - **POSIX guard is correct.** `Files.setPosixFilePermissions` declares `UnsupportedOperationException` for non-POSIX providers; catching exactly that and keeping the pre-existing `supportedFileAttributeViews().contains("posix")` fast path means non-POSIX filesystems now proceed with default temp-file permissions instead of crashing `createTemp` (which previously aborted the whole export). No JSON content or file-move behaviour changed; `IOException` from the attribute write was and remains uncaught, which is out of this ticket's scope.
 - **Export JSON unchanged.** `normalized` → `orderedChests` is a pure rename (`JsonExporter.kt:33`); the sort key, `DesignJson.encodeToString` call, and everything downstream are untouched.
 - **Tests are renames, not weakenings.** `MessagesTest.kt` swaps `Messages.x(...)` for the corresponding internal top-level function one-for-one, including all fallback/blank-reason and no-target-vs-not-a-chest cases; the prefix assertion (`startsWith(Messages.PREFIX)`) and `allMessages()` coverage are preserved. Internal visibility is accessible from the test source set (same module).
+
+## Round 2
+
+### Verdict
+
+Pass. The round-2 edits (message-function renames, `applyWorldReadablePermissions` deriving attribute views from `temp`, `failure()` inlining, `docs/architecture.md` refresh) introduce no behavioural change, and all round-1 guarantees still hold.
+
+### Findings
+
+None.
+
+### Non-findings
+
+- **Renames are pure renames.** `chestEditUsageMessage` → `usageMessage`, `chestEditNamedMessage` → `namedMessage`, etc. (`ChestEditCommand.kt:81-106`); every body string, color, and the `styled` composition are character-for-character identical to the round-1 versions I verified against the old `Messages.kt`. All call sites (`ChestEditCommand.kt:42,60-64`) and `MessagesTest.kt` imports/assertions were updated one-for-one; a grep confirms no name collisions with other top-level functions in the `commands` package and no leftover old names.
+- **POSIX guard still correct after the `temp`-derived change.** `applyWorldReadablePermissions(temp)` (`JsonExporter.kt:64-71`) now checks `temp.fileSystem.supportedFileAttributeViews()`. Since `temp` is created by `Files.createTempFile(directory, ...)` (`JsonExporter.kt:59`), it always lives on the same filesystem as `directory`, so the guard is equivalent to the directory-based check — and arguably more precise, since it is the temp file's own provider that must support the attribute write. The `UnsupportedOperationException` catch and the "defaults are fine" fallback are unchanged; no JSON or move behaviour changed.
+- **`failure()` inlining is behaviour-neutral.** `UiDesignerCommand.save` (`:100-105`) still maps any exporter exception to `SaveOutcome.WriteFailed(outputFile, e.message)` and `reload` (`:117-119`) still maps any exception to `ReloadOutcome.Failed(e.message)`; the inlined try/catch blocks are semantically identical to the previous wrapper.
+- **`partnerOffset` and grouping untouched.** `DoubleChestGrouper.kt:114-122` is byte-identical to the version I verified in round 1 against the old when-table.
+- **Tests not weakened.** `MessagesTest.kt` keeps every round-1 assertion (prefix, palette, aqua prefix child, per-message color/wording, fallback hints, no-target vs not-a-chest distinction) and the full 20-entry `allMessages()` coverage; only the function names in the calls changed.
+- **`docs/architecture.md` refresh is documentation-only** and accurately describes the new split (out of my scope, noted only because it was part of this round's diff).

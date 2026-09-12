@@ -132,10 +132,10 @@ uidesigner/
   ignored), while `reload`, `help`, and the bare root accept any sender
   (console included). Both commands are built with the `rooster-commands` DSL
   (`literal`/`greedyString` nodes compiled to CommandAPI `CommandTree`s by the
-   library's `command-api` backend); `Messages` owns the shared styling
-   primitives (prefix, colour palette, `styled`), while each command file owns
-   its own message bodies as internal top-level functions, kept testable from
-   the same module. CommandAPI
+  library's `command-api` backend); `Messages` owns the shared styling
+  primitives (prefix, colour palette, `styled`), while each command file owns
+  its own message bodies as internal top-level functions, kept testable from
+  the same module. CommandAPI
   suggests the registered subcommand literals automatically, and `/chest-edit`
   gets its `clear` suggestion from a real `clear` literal node beside the
   optional greedy name argument (a `CommandTree` branches at the root, so the

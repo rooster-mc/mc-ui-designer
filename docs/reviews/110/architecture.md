@@ -92,3 +92,44 @@ named sensibly; nothing structural needs to change.
   injected selection lambda, and the command classes stay thin — the added
   message functions are pure string→`Component` mappers with no command
   logic.
+
+## Round 2
+
+### Verdict
+
+Pass. Both round-1 findings are fixed as suggested, and the fixes introduced no
+new staleness. No source changes landed since round 1 (`HEAD~2..HEAD` is the
+refactor commit already reviewed plus the round-1 report commit), so the doc
+check ran against the same code.
+
+### Findings
+
+None.
+
+### Non-findings
+
+- **Round-1 finding 1 fixed.** `docs/architecture.md:36` now reads
+  `Messages.kt    shared chat styling primitives (prefix, palette, styled)`,
+  and the `commands/` map entries (lines 33-34) gained "(+ its message
+  bodies)" — exactly the suggested fix, and it matches the code
+  (`Messages.kt` holds only `PREFIX`, the palette, `styled`,
+  `reasonOrDefault`, `withTrailingPeriod`; bodies are internal top-level
+  functions in the two command files).
+- **Round-1 finding 2 fixed.** `docs/architecture.md:135-138` now says
+  `Messages` owns the shared styling primitives while each command file owns
+  its message bodies as internal top-level functions, testable from the same
+  module. The normative sentence earlier reviews measured against is now
+  accurate again.
+- **No new staleness.** Re-checked the whole of `docs/architecture.md` against
+  the current tree: the grouper geometry paragraph (lines 95-97) still matches
+  the arithmetic `partnerOffset` and its why-note; the exporter bullet's
+  "normalises order" (line ~147) still matches `orderedChests`; the atomic-write
+  description still matches the guarded `applyWorldReadablePermissions`.
+  `docs/design.md`, `docs/fcp.md`, and `docs/data-format.md` contain no
+  `Messages`/message-layout mentions, so nothing else needed updating.
+- **Cosmetic only, not mine to fix:** the reflow at `docs/architecture.md:135`
+  left a stray extra leading space ("`   library's`") and a dangling "CommandAPI"
+  at the end of line 138 before the next sentence. Purely markdown formatting,
+  no meaning changed; flagging for readability's awareness, not a finding.
+- **Concur with correctness round 2** (its report records the same fixes
+  verified from the string-equivalence side; no overlap or contradiction).
