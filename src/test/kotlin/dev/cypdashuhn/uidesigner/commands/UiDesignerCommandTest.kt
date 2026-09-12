@@ -254,6 +254,8 @@ class UiDesignerCommandTest {
     @Test
     fun `dispatch of save reports a partner half that was not captured`() {
         clippedHalfChest(15, 0)
+        clippedHalfChest(16, 0, type = ChestData.Type.RIGHT)
+        assertFalse(world.isChunkLoaded(1, 0))
         val plugin = MockCommandAPIPlugin.load()
         registeredCommand(plugin, region(15, 0, 0, 16, 0, 0))
         player.isOp = true
@@ -670,11 +672,16 @@ class UiDesignerCommandTest {
     private fun blockAt(material: Material, x: Int, y: Int, z: Int): Block =
         world.getBlockAt(x, y, z).apply { type = material }
 
-    private fun clippedHalfChest(x: Int, z: Int, material: Material = Material.CHEST): Block =
+    private fun clippedHalfChest(
+        x: Int,
+        z: Int,
+        material: Material = Material.CHEST,
+        type: ChestData.Type = ChestData.Type.LEFT,
+    ): Block =
         blockAt(material, x, 0, z).apply {
             blockData =
                 ChestDataMock(material).apply {
-                    type = ChestData.Type.LEFT
+                    this.type = type
                     facing = BlockFace.NORTH
                 }
         }
