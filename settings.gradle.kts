@@ -23,6 +23,14 @@ check(roosterCommandsDir.isDirectory) {
     "rooster-commands must be checked out beside this repo at ${roosterCommandsDir.canonicalPath}"
 }
 
+// rooster-commands builds against rooster-core via its own composite include, so the
+// checkout requirement is transitive; fail here with a clear message instead of deep
+// inside the included build.
+val roosterCoreDir = rootDir.resolve("../rooster-core")
+check(roosterCoreDir.isDirectory) {
+    "rooster-core must be checked out beside this repo at ${roosterCoreDir.canonicalPath}"
+}
+
 includeBuild(roosterCommandsDir) {
     dependencySubstitution {
         substitute(module("dev.rooster:rooster-commands"))
