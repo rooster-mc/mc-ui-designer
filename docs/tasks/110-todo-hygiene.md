@@ -1,6 +1,6 @@
 ---
 name: TODO-sweep hygiene and exporter robustness
-status: in-progress
+status: done
 parent: Polish
 depends-on: ["100"]
 reviewers: [correctness, architecture, readability]
