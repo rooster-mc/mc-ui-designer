@@ -105,3 +105,58 @@ outside those two flags and should be decided consciously.
   `CommandAPI.onEnable()`/`onDisable()` calls are unchanged. Unmatched input
   (`/uidesigner foo`) hits the same Brigadier no-match path as the old
   `CommandAPICommand` structure, so error behaviour is unchanged there too.
+
+## Round 2
+
+### Verdict
+
+Ship. The round-1 finding is fixed exactly as suggested (console no-op
+convention chosen for bare `/chest-edit`, pinned by a test), and the
+round-2 refactors (executor hoisting, `argOrNull` early return, const
+templating, settings check) are all behaviour-preserving. No new findings.
+
+### Findings
+
+None.
+
+### Non-findings
+
+- **Round-1 finding 1 resolved correctly.** The root executor
+  (`ChestEditCommand.kt:37-41`) now guards `sender as? Player ?: return@CommandExecutor`.
+  `Context.playerOrNull` is literally `sender as? Player` (`rooster-commands`
+  `Context.kt:9`), so the direct cast in the raw `CommandExecutor` (whose
+  `sender` is the same `CommandSender` object the `Context` wraps) behaves
+  identically to the extension — no divergence between the two guard styles.
+  Players still get the usage message; console is silent, and the new
+  `console bare chest-edit is a silent no-op` test pins it via
+  `nextComponentMessage() == null`.
+- **`argOrNull<String>("name") ?: return@onExecute` cannot regress.** The
+  greedy executor only fires via `executePathCore` after the greedy node
+  matched, in which case CommandAPI has stored a (non-null) value under
+  `"name"` — including the empty-string parse, which still reaches `apply("")`
+  and the clear path exactly as the old `?: ""` fallback did. The early return
+  is reachable only in a hypothetical state where the old code would have run
+  the clear path on a missing argument — silently no-opping there is strictly
+  safer (it could have cleared a chest on a dispatch quirk). No sending path
+  changes behaviour.
+- **`helpExecutor` hoisting is semantics-neutral.** The `help` literal keeps
+  its own `onExecute { sender.sendMessage(Messages.help()) }` with the same
+  body; the root now shares the hoisted `CommandExecutor` with the identical
+  body and no sender guard, so console reaches `Messages.help()` through both
+  the `/uidesigner help` literal and the bare `/uidesigner` root, matching the
+  pre-ticket behaviour. Same shape for `usageExecutor`: hoisted, guarded, and
+  attached only to the root.
+- **`CONFIG_UNREADABLE_WARNING` templating is a compile-time constant.**
+  `"$CONFIG_FILE_NAME could not be read; leaving it unchanged"` with
+  `CONFIG_FILE_NAME = "config.yml"` (both `const val` in the same companion)
+  folds to the identical string at compile time; no runtime or message change.
+- **`rooster-core` settings check is correct and harmless.** Verified against
+  the sibling repo: `rooster-commands/settings.gradle.kts` does
+  `includeBuild("../rooster-core")` and both its modules depend on
+  `dev.rooster.core:rooster-core`, so the transitive checkout requirement is
+  real and the failure message (path + expectation) is accurate. The `check`
+  runs once at root-build settings-configuration time, same as the existing
+  `rooster-commands` check above it, and does not affect test execution beyond
+  requiring the checkout to exist — which it does in this environment.
+- **Docs changes (83d0ad2) touch no logic**; nothing in my scope to re-check
+  beyond confirming no source behaviour is referenced incorrectly by them.

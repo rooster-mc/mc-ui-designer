@@ -121,3 +121,61 @@ executor, and one duplicated literal in the plugin constants.
   printing usage): within readability the fix direction chosen there doesn't
   affect this report; whichever convention is picked, findings 1–2 above still
   apply to how the executors are written.
+
+## Round 2
+
+### Verdict
+
+Ship. All five round-1 findings are fixed as suggested, the fixes read better
+than the originals, and the new settings guard carries a legitimate
+non-obvious-*why* comment. No new findings.
+
+### Findings
+
+None.
+
+### Non-findings
+
+- **Round-1 finding 1 fixed.** `UiDesignerCommand.kt:69-70` hoists
+  `val helpExecutor` and the root now attaches it via `.executes(helpExecutor)`;
+  the raw `CommandExecutor` lambda is gone from the chain. The `help` literal
+  keeps its own one-line `onExecute { sender.sendMessage(Messages.help()) }`
+  body, so the help text still appears twice in the function — but the rooster
+  `onExecute` callback is a `Context.() -> Unit`, which a `CommandExecutor`
+  cannot be reused as, so sharing the hoisted value across both would need a
+  wrapper indirection worse than the six-word duplication. Accepting it.
+- **Round-1 finding 2 fixed.** `ChestEditCommand.kt:37-42` hoists
+  `usageExecutor` with the player guard inside, and the tree block now ends in
+  `.executes(usageExecutor)` — the dense inline lambda on the chain is gone and
+  the register body scans top-to-bottom as intended.
+- **Round-1 finding 3 fixed.** The greedy executor
+  (`ChestEditCommand.kt:45-48`) now binds `val rawName = argOrNull<String>("name")
+  ?: return@onExecute` and passes the named local to `apply`; the phantom
+  `?: ""` empty-string branch is gone and the executor reads as
+  guard → resolve → apply → send.
+- **Round-1 finding 4 fixed.** `CONFIG_UNREADABLE_WARNING` is now
+  `"$CONFIG_FILE_NAME could not be read; leaving it unchanged"`
+  (`UiDesignerPlugin.kt:82-83`); the literal is named once.
+- **Round-1 finding 5 fixed.** All guarded executors send through the bound
+  `player` (`ChestEditCommand.kt:48,54`, `UiDesignerCommand.kt:73`);
+  `sender` remains only where there is no player guard (`reload`, `help`,
+  `usageExecutor`'s pre-guard lines), which is now the consistent rule rather
+  than a mix.
+- **Two guard idioms coexist by necessity, not drift.** The hoisted raw
+  executors use `sender as? Player ?: return@CommandExecutor` while the DSL
+  executors use `playerOrNull ?: return@onExecute`. This is forced by the API
+  boundary — `playerOrNull` is a `Context` extension and cannot be called inside
+  a CommandAPI `CommandExecutor` — and correctness round 2 confirmed the two
+  forms are semantically identical. Nothing to change.
+- **New settings comment is rule-compliant.** The `rooster-core` guard comment
+  (`settings.gradle.kts:26-28`) explains the non-obvious *why* (the requirement
+  is transitive via rooster-commands' own composite include; failing here gives
+  a clear message instead of a deep resolution error), matches the placement and
+  message format of the two existing guards, and introduces no naming drift
+  (`roosterCoreDir` mirrors `roosterCommandsDir`/`roosterRegionDir`).
+- **Formatting conforms.** No line in the touched sources exceeds the
+  `.editorconfig` `max_line_length = 100`; the hoisted executor locals and the
+  `greedyString("name").onExecute { ... }` collapse follow the existing style.
+  The `fc4952d` comment-spacing fix in `DoubleChestGrouper.kt` is cosmetic and
+  the remaining TODO there is the ticket's declared `rooster-region` deferral,
+  not new debt.

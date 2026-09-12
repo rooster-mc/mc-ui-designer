@@ -134,3 +134,70 @@ just made false. Layering itself is clean.
   The new `worldEditSelectionOf` helper is a faithful rename of the old
   `faweSelectionSource()` laziness role, and the explanatory comment it carries
   is a legitimate non-obvious-*why* comment.
+
+## Round 2
+
+### Verdict
+
+Ship. All four round-1 findings are resolved accurately: `docs/design.md` now
+matches the code on FAWE containment, the no-permission decision (including the
+console no-op convention the round-1 correctness discussion settled on), and
+the `rooster-commands` adoption record; `docs/architecture.md` documents the
+substitution mappings and the three-sibling checkout requirement; and the
+`rooster-core` `check(...)` follows the existing settings conventions with a
+truthful why-comment. No new findings in my scope.
+
+### Findings
+
+None.
+
+### Non-findings
+
+- **Round-1 findings 1–3 (design.md staleness) resolved.** No
+  `SelectionSource`/`FaweSelectionSource`/`noPermission`/permission-node
+  references remain in `docs/design.md` or `docs/architecture.md`. The FAWE
+  bullet now describes the `(Player) -> Region?` lambda and names
+  `UiDesignerPlugin.worldEditSelectionOf`, matching the code. The
+  "**No permissions.**" bullet states the convention the code now implements:
+  `save` and both `/chest-edit` executors are player-only with silent console
+  no-ops — confirmed against `UiDesignerCommand.kt:70-73` (`playerOrNull ?:
+  return@onExecute`) and the round-2 `usageExecutor` guard in
+  `ChestEditCommand.kt:37-41` (`sender as? Player ?: return@CommandExecutor`),
+  with the bare-root `/chest-edit` console case now uniformly silent and pinned
+  by the new test; `reload`, `help`, and the bare `/uidesigner` root accept any
+  sender, as documented. The adoption record is accurate: sibling composite
+  build, `../rooster-commands` checkout, transitive `../rooster-core`,
+  `command-api` backend compiling to CommandAPI `CommandTree`s, CommandAPI
+  11.2.0 shaded beneath, and the correct note that `rooster-core` is only
+  transitive (this plugin does not use its service hooks — the imports in both
+  command classes and `UiDesignerPlugin` span only `dev.rooster.commands`,
+  `dev.rooster.commands.commandapi`, and `dev.rooster.region`).
+- **Round-1 finding 4 (substitution mappings) resolved.** The new
+  `docs/architecture.md` sentence lists all four mappings exactly as
+  `settings.gradle.kts` declares them (`rooster-region` → `:core`,
+  `rooster-region-worldedit` → `:worldedit`, `rooster-commands` → root,
+  `command-api` → `:command-api`) and states the three-sibling checkout
+  requirement with the `check(...)` guard. Package tree, seams, and data-flow
+  sections are unaffected by the executor hoists in 8696937 — those changed no
+  names, signatures, or layer boundaries the docs reference.
+- **Round-1 finding 5 (rooster-core checkout) resolved appropriately.** The
+  `check(...)` in `settings.gradle.kts:26-31` mirrors the two existing guards
+  in message format and placement (settings-configuration time, before any
+  includeBuild), and its why-comment explains the transitive nature — a
+  legitimate non-obvious-*why* comment. The wording is truthful against the
+  sibling: `rooster-commands/settings.gradle.kts` does
+  `includeBuild("../rooster-core")` and its modules depend on
+  `dev.rooster.core:rooster-core:1.0-SNAPSHOT` (group/version confirmed in
+  `rooster-core/build.gradle.kts`). No substitution alias for
+  `dev.rooster.core:rooster-core` is needed in this repo's
+  `dependencySubstitution` block: `rooster-commands`' own settings already
+  substitutes it inside its included graph, so the alias would be dead
+  configuration here. The docs now say exactly this ("only pulled in
+  transitively").
+- **Executor hoists (8696937) introduce no structural drift.** The hoisted
+  `usageExecutor`/`helpExecutor` locals stay inside `register()`; no new
+  package, class, or seam appeared, so the architecture doc's package tree and
+  integration-point description remain accurate. The `argOrNull<String>("name")
+  ?: return@onExecute` early return and the `CONFIG_UNREADABLE_WARNING`
+  const-templating change no documented contracts (correctness round 2 traced
+  both as behaviour-preserving; I concur for the structure/docs angle).
