@@ -20,7 +20,7 @@ goes through the review pipeline in `docs/workflow.md`.
 | [100](100-adopt-rooster-commands.md) | Adopt rooster-commands and drop command-layer accidents | Polish | 090 | done |
 | [110](110-todo-hygiene.md) | TODO-sweep hygiene and exporter robustness | Polish | 100 | done |
 | [120](120-backlog-rooster-region-scanner.md) | Backlog: ChestScanner split into rooster-region | Polish | — | backlog |
-| [130](130-backlog-rooster-commands-api-gaps.md) | Backlog: rooster-commands API gaps noticed in adoption | Polish | — | backlog |
+| [130](130-consume-rooster-commands-gaps.md) | Consume rooster-commands root executor and suggestion dedupe | Polish | 100 | todo |
 
 ## Template
 
