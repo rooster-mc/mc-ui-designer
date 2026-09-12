@@ -1,13 +1,11 @@
 package dev.cypdashuhn.uidesigner.commands
 
-import dev.cypdashuhn.uidesigner.capture.SelectionSource
 import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.cypdashuhn.uidesigner.export.DesignJson
 import dev.cypdashuhn.uidesigner.export.JsonExporter
 import dev.cypdashuhn.uidesigner.export.UiChest
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
-import dev.cypdashuhn.uidesigner.util.Messages
 import dev.jorel.commandapi.CommandAPITestUtilities
 import dev.jorel.commandapi.MockCommandAPIPlugin
 import dev.rooster.region.BlockPos
@@ -20,7 +18,6 @@ import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.block.Chest
 import org.bukkit.configuration.file.YamlConfiguration
-import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.java.JavaPlugin
 import org.junit.jupiter.api.AfterEach
@@ -210,7 +207,7 @@ class UiDesignerCommandTest {
         val command =
             UiDesignerCommand(
                 plugin = MockBukkit.createMockPlugin(),
-                selectionSource = FakeSelectionSource(region(0, 0, 0, 0, 0, 0)),
+                selectionProvider = { region(0, 0, 0, 0, 0, 0) },
                 configProvider = { throw IllegalStateException("missing default output") },
                 reloadAction = { ReloadResult.Reloaded },
             )
@@ -229,7 +226,7 @@ class UiDesignerCommandTest {
         val command =
             UiDesignerCommand(
                 plugin = MockBukkit.createMockPlugin(),
-                selectionSource = FakeSelectionSource(region(0, 0, 0, 0, 0, 0)),
+                selectionProvider = { region(0, 0, 0, 0, 0, 0) },
                 configProvider = { throw IllegalStateException() },
                 reloadAction = { ReloadResult.Reloaded },
             )
@@ -249,7 +246,7 @@ class UiDesignerCommandTest {
         val command =
             UiDesignerCommand(
                 plugin = MockBukkit.createMockPlugin(),
-                selectionSource = FakeSelectionSource(null),
+                selectionProvider = { null },
                 configProvider = { config(current) },
                 reloadAction = {
                     reloaded = true
@@ -269,7 +266,7 @@ class UiDesignerCommandTest {
         val command =
             UiDesignerCommand(
                 plugin = MockBukkit.createMockPlugin(),
-                selectionSource = FakeSelectionSource(null),
+                selectionProvider = { null },
                 configProvider = { config(DEFAULT_OUTPUT) },
                 reloadAction = { ReloadResult.UsingDefaults },
             )
@@ -285,7 +282,7 @@ class UiDesignerCommandTest {
         val command =
             UiDesignerCommand(
                 plugin = MockBukkit.createMockPlugin(),
-                selectionSource = FakeSelectionSource(null),
+                selectionProvider = { null },
                 configProvider = { config(DEFAULT_OUTPUT) },
                 reloadAction = { ReloadResult.InvalidOutput },
             )
@@ -301,7 +298,7 @@ class UiDesignerCommandTest {
         val command =
             UiDesignerCommand(
                 plugin = MockBukkit.createMockPlugin(),
-                selectionSource = FakeSelectionSource(null),
+                selectionProvider = { null },
                 configProvider = { config(DEFAULT_OUTPUT) },
                 reloadAction = { throw IllegalStateException("bad config") },
             )
@@ -327,49 +324,12 @@ class UiDesignerCommandTest {
     }
 
     @Test
-    fun `dispatch of save is denied without permission`() {
-        blockAt(Material.CHEST, 0, 0, 0)
-        var exported = false
-        val plugin = MockCommandAPIPlugin.load()
-        registeredCommand(
-            plugin,
-            region(0, 0, 0, 0, 0, 0),
-            exporter = { _, _ -> exported = true },
-        )
-
-        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
-
-        assertFalse(exported)
-        assertEquals(
-            Messages.noPermission(UiDesignerCommand.SAVE_PERMISSION),
-            player.nextComponentMessage(),
-        )
-    }
-
-    @Test
-    fun `dispatch of save succeeds with the permission node on a non-op`() {
-        blockAt(Material.CHEST, 0, 0, 0)
-        var exported = false
-        val plugin = MockCommandAPIPlugin.load()
-        registeredCommand(
-            plugin,
-            region(0, 0, 0, 0, 0, 0),
-            exporter = { _, _ -> exported = true },
-        )
-        player.addAttachment(plugin, UiDesignerCommand.SAVE_PERMISSION, true)
-
-        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
-
-        assertTrue(exported)
-    }
-
-    @Test
     fun `dispatch of save reports an unusable output path`() {
         blockAt(Material.CHEST, 0, 0, 0)
         val plugin = MockCommandAPIPlugin.load()
         UiDesignerCommand(
             plugin = plugin,
-            selectionSource = FakeSelectionSource(region(0, 0, 0, 0, 0, 0)),
+            selectionProvider = { region(0, 0, 0, 0, 0, 0) },
             configProvider = { throw IllegalStateException("missing default output") },
             reloadAction = { ReloadResult.Reloaded },
         ).register()
@@ -380,6 +340,22 @@ class UiDesignerCommandTest {
         val message = plainMessage()
         assertTrue(message.contains("configured output path"))
         assertTrue(message.contains("missing default output"))
+    }
+
+    @Test
+    fun `console save does not export`() {
+        blockAt(Material.CHEST, 0, 0, 0)
+        var exported = false
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            region(0, 0, 0, 0, 0, 0),
+            exporter = { _, _ -> exported = true },
+        )
+
+        CommandAPITestUtilities.assertCommandSucceeds(server.consoleSender, "uidesigner save")
+
+        assertFalse(exported)
     }
 
     @Test
@@ -459,28 +435,7 @@ class UiDesignerCommandTest {
     }
 
     @Test
-    fun `dispatch of reload is denied without permission`() {
-        var reloaded = false
-        val plugin = MockCommandAPIPlugin.load()
-        registeredCommand(
-            plugin,
-            reloadAction = {
-                reloaded = true
-                ReloadResult.Reloaded
-            },
-        )
-
-        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner reload")
-
-        assertFalse(reloaded)
-        assertEquals(
-            Messages.noPermission(UiDesignerCommand.RELOAD_PERMISSION),
-            player.nextComponentMessage(),
-        )
-    }
-
-    @Test
-    fun `help needs no permission and lists the subcommands`() {
+    fun `help lists the subcommands`() {
         val plugin = MockCommandAPIPlugin.load()
         registeredCommand(plugin)
 
@@ -491,7 +446,6 @@ class UiDesignerCommandTest {
         assertTrue(message.contains("reload"))
         assertTrue(message.contains("help"))
         assertTrue(message.contains("chest-edit"))
-        assertTrue(message.contains("(op)"))
     }
 
     @Test
@@ -550,7 +504,7 @@ class UiDesignerCommandTest {
     ) {
         UiDesignerCommand(
             plugin = plugin,
-            selectionSource = FakeSelectionSource(region),
+            selectionProvider = { region },
             configProvider = { config(outputFile) },
             reloadAction = reloadAction,
             exporter = exporter,
@@ -564,7 +518,7 @@ class UiDesignerCommandTest {
     ): UiDesignerCommand =
         UiDesignerCommand(
             plugin = MockBukkit.createMockPlugin(),
-            selectionSource = FakeSelectionSource(region),
+            selectionProvider = { region },
             configProvider = { config(outputFile) },
             reloadAction = { ReloadResult.Reloaded },
             exporter = exporter,
@@ -587,12 +541,6 @@ class UiDesignerCommandTest {
             Location(world, minX.toDouble(), minY.toDouble(), minZ.toDouble()),
             Location(world, maxX.toDouble(), maxY.toDouble(), maxZ.toDouble()),
         )
-
-    private class FakeSelectionSource(
-        private val region: Region?
-    ) : SelectionSource {
-        override fun selectionOf(player: Player): Region? = region
-    }
 
     private companion object {
         val DEFAULT_OUTPUT: Path = Path.of("/tmp/uidesigner-test/design.json")

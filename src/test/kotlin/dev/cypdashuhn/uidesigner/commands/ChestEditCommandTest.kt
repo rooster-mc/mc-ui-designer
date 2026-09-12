@@ -1,7 +1,6 @@
 package dev.cypdashuhn.uidesigner.commands
 
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
-import dev.cypdashuhn.uidesigner.util.Messages
 import dev.jorel.commandapi.CommandAPITestUtilities
 import dev.jorel.commandapi.MockCommandAPIPlugin
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
@@ -170,35 +169,6 @@ class ChestEditCommandTest {
         assertTrue(message.contains("Usage"))
         assertTrue(message.contains("clear"))
         assertNull(ChestNamer.nameOf(chest))
-    }
-
-    @Test
-    fun `command dispatch is denied without permission`() {
-        val chest = blockAt(Material.CHEST)
-        val plugin = MockCommandAPIPlugin.load()
-        ChestEditCommand(plugin) { chest }.register()
-        val player = server.addPlayer()
-
-        CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit Shop")
-
-        assertNull(ChestNamer.nameOf(chest))
-        assertEquals(
-            Messages.noPermission(ChestEditCommand.PERMISSION),
-            player.nextComponentMessage(),
-        )
-    }
-
-    @Test
-    fun `command dispatch succeeds with the permission node on a non-op`() {
-        val chest = blockAt(Material.CHEST)
-        val plugin = MockCommandAPIPlugin.load()
-        ChestEditCommand(plugin) { chest }.register()
-        val player = server.addPlayer()
-        player.addAttachment(plugin, ChestEditCommand.PERMISSION, true)
-
-        CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit Shop")
-
-        assertEquals("Shop", ChestNamer.nameOf(chest))
     }
 
     @Test

@@ -9,6 +9,6 @@ data class CapturedSelection(
 )
 
 object ChestCapture {
-    fun capture(source: SelectionSource, player: Player): CapturedSelection? =
-        source.selectionOf(player)?.let { CapturedSelection(it, ChestScanner.scan(it)) }
+    fun capture(selectionOf: (Player) -> Region?, player: Player): CapturedSelection? =
+        selectionOf(player)?.let { CapturedSelection(it, ChestScanner.scan(it)) }
 }
