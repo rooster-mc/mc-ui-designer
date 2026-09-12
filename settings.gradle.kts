@@ -17,3 +17,17 @@ includeBuild(roosterRegionDir) {
             .using(project(":worldedit"))
     }
 }
+
+val roosterCommandsDir = rootDir.resolve("../rooster-commands")
+check(roosterCommandsDir.isDirectory) {
+    "rooster-commands must be checked out beside this repo at ${roosterCommandsDir.canonicalPath}"
+}
+
+includeBuild(roosterCommandsDir) {
+    dependencySubstitution {
+        substitute(module("dev.rooster:rooster-commands"))
+            .using(project(":"))
+        substitute(module("dev.rooster:command-api"))
+            .using(project(":command-api"))
+    }
+}

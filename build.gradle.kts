@@ -39,6 +39,8 @@ dependencies {
 
     implementation("dev.rooster.region:rooster-region:1.0-SNAPSHOT")
     implementation("dev.rooster.region:rooster-region-worldedit:1.0-SNAPSHOT")
+    implementation("dev.rooster:rooster-commands:1.0.0")
+    implementation("dev.rooster:command-api:1.0.0")
 
     // BOM supplies transitive deps only; the explicit $faweVersion overrides its FAWE 2.15.0.
     compileOnly(platform("com.intellectualsites.bom:bom-newest:1.56"))
