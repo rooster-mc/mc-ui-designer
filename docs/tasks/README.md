@@ -21,6 +21,7 @@ goes through the review pipeline in `docs/workflow.md`.
 | [110](110-todo-hygiene.md) | TODO-sweep hygiene and exporter robustness | Polish | 100 | done |
 | [120](120-consume-rooster-region-enumeration.md) | Consume rooster-region lazy block enumeration | Polish | — | done |
 | [130](130-consume-rooster-commands-gaps.md) | Consume rooster-commands root executor and suggestion dedupe | Polish | 100 | done |
+| [140](140-clipped-double-chest.md) | Abort export on a double chest clipped by the selection | Polish | — | todo |
 
 ## Template
 
