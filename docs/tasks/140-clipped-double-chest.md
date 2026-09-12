@@ -1,6 +1,6 @@
 ---
 name: Abort export on a double chest clipped by the selection
-status: todo
+status: in-progress
 parent: Polish
 depends-on: []
 reviewers: [tester, correctness, architecture, readability, ux]
