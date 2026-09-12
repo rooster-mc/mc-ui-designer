@@ -19,6 +19,8 @@ import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import java.nio.file.Path
 
+// TODO: Like in ChestEditCommands, move to rooster-commands and replace hardcoded strings with
+// variables, and remove the unneeded permission system.
 class UiDesignerCommand(
     private val plugin: JavaPlugin,
     private val selectionSource: SelectionSource,

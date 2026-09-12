@@ -8,6 +8,8 @@ import org.bukkit.block.Chest
 object ChestScanner {
     private val CHEST_MATERIALS = setOf(Material.CHEST, Material.TRAPPED_CHEST)
 
+    // TODO: Some of this should go to rooster-region. First just triple for loop, and then
+    // a wrapper around that for chunks
     fun scan(region: Region): List<ChestContent> {
         val found = mutableListOf<ChestContent>()
         for (x in region.minX..region.maxX) {

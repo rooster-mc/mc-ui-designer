@@ -36,6 +36,7 @@ open class UiDesignerPlugin : JavaPlugin() {
         logger.info("UiDesigner enabled")
     }
 
+    // TODO: As mentioned we want to replace this interface system.
     // FAWE is compileOnly and absent from MockBukkit test classpaths; delegating through
     // this wrapper keeps FaweSelectionSource from loading until a player runs /uidesigner save.
     private fun faweSelectionSource(): SelectionSource =
@@ -45,6 +46,7 @@ open class UiDesignerPlugin : JavaPlugin() {
         }
 
     fun reloadConfiguration(): ReloadResult {
+        // TODO: "config.yml" into variable
         val configFile = dataFolder.resolve("config.yml")
         val readable =
             !configFile.isFile ||
@@ -55,9 +57,11 @@ open class UiDesignerPlugin : JavaPlugin() {
         val result =
             when {
                 !readable -> {
+                    // TODO: Var
                     logger.warning("config.yml could not be read; leaving it unchanged")
                     ReloadResult.UsingDefaults
                 }
+
                 loaded.hasUnusableOutputFile() -> {
                     logger.warning(
                         "${UiDesignerConfig.OUTPUT_FILE_KEY} is not a valid path; " +
@@ -65,6 +69,7 @@ open class UiDesignerPlugin : JavaPlugin() {
                     )
                     ReloadResult.InvalidOutput
                 }
+
                 else -> {
                     if (loaded.writeDefaultOutputIfBlank()) saveConfig()
                     ReloadResult.Reloaded
@@ -76,6 +81,7 @@ open class UiDesignerPlugin : JavaPlugin() {
 
     override fun onDisable() {
         CommandAPI.onDisable()
+        // TODO: UiDesigner into var
         logger.info("UiDesigner disabled")
     }
 }

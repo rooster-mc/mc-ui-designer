@@ -9,6 +9,7 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
 
+// TODO: Is this file optionally windows compatible? if not turn it into a windows compatible one.
 object JsonExporter {
     private val WORLD_READABLE: Set<PosixFilePermission> =
         PosixFilePermissions.fromString("rw-r--r--")
@@ -29,6 +30,7 @@ object JsonExporter {
         }
     }
 
+    // TODO: Normalized by what? name undescriptive
     private fun normalized(chests: List<UiChest>): List<UiChest> =
         chests
             .map { it to it.requiredPosition() }

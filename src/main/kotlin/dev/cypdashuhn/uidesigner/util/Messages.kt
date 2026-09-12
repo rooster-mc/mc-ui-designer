@@ -5,6 +5,8 @@ import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
 import java.nio.file.Path
 
+// TODO: Not a fan. i think messages should go where they are used. You can keep generalized
+// variables here, but the per feature content is stupid here.
 object Messages {
     const val PREFIX = "[UiDesigner] "
 
