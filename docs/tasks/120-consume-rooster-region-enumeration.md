@@ -1,6 +1,6 @@
 ---
 name: Consume rooster-region lazy block enumeration
-status: todo
+status: in-progress
 parent: Polish
 depends-on: []
 reviewers: [tester, correctness, architecture, readability]
