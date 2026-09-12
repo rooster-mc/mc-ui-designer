@@ -172,6 +172,16 @@ class ChestEditCommandTest {
     }
 
     @Test
+    fun `console bare chest-edit is a silent no-op`() {
+        val plugin = MockCommandAPIPlugin.load()
+        ChestEditCommand(plugin) { null }.register()
+
+        CommandAPITestUtilities.assertCommandSucceeds(server.consoleSender, "chest-edit")
+
+        assertNull(server.consoleSender.nextComponentMessage())
+    }
+
+    @Test
     fun `tab completion suggests clear`() {
         val plugin = MockCommandAPIPlugin.load()
         ChestEditCommand(plugin) { null }.register()

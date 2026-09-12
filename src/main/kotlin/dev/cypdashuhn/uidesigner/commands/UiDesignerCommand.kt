@@ -66,14 +66,16 @@ class UiDesignerCommand(
     }
 
     fun register() {
+        val helpExecutor =
+            CommandExecutor { sender, _ -> sender.sendMessage(Messages.help()) }
         command("uidesigner") {
             literal("save").onExecute {
                 val player = playerOrNull ?: return@onExecute
-                sender.sendMessage(saveMessage(save(player)))
+                player.sendMessage(saveMessage(save(player)))
             }
             literal("reload").onExecute { sender.sendMessage(reloadMessage(reload())) }
             literal("help").onExecute { sender.sendMessage(Messages.help()) }
-        }.executes(CommandExecutor { sender, _ -> sender.sendMessage(Messages.help()) })
+        }.executes(helpExecutor)
             .withAliases("uid")
             .register(plugin)
     }

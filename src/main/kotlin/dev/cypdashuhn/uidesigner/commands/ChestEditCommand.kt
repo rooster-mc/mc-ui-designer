@@ -35,22 +35,25 @@ class ChestEditCommand(
     }
 
     fun register() {
+        val usageExecutor =
+            CommandExecutor { sender, _ ->
+                val player = sender as? Player ?: return@CommandExecutor
+                player.sendMessage(Messages.chestEditUsage())
+            }
         command("chest-edit") {
-            greedyString("name")
-                .onExecute {
-                    val player = playerOrNull ?: return@onExecute
-                    sender.sendMessage(
-                        outcomeMessage(apply(targetResolver(player), argOrNull("name") ?: "")),
-                    )
-                }
+            greedyString("name").onExecute {
+                val player = playerOrNull ?: return@onExecute
+                val rawName = argOrNull<String>("name") ?: return@onExecute
+                player.sendMessage(outcomeMessage(apply(targetResolver(player), rawName)))
+            }
             // A CommandTree branches at the root, so "clear" can be a real literal node
             // beside the greedy name instead of a reserved sentinel name; the greedy
             // branch still handles any-casing, blank, and padded input via apply().
             literal("clear").onExecute {
                 val player = playerOrNull ?: return@onExecute
-                sender.sendMessage(outcomeMessage(apply(targetResolver(player), "clear")))
+                player.sendMessage(outcomeMessage(apply(targetResolver(player), "clear")))
             }
-        }.executes(CommandExecutor { sender, _ -> sender.sendMessage(Messages.chestEditUsage()) })
+        }.executes(usageExecutor)
             .register(plugin)
     }
 

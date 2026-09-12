@@ -81,7 +81,7 @@ open class UiDesignerPlugin : JavaPlugin() {
         private const val LOG_ENABLED = "UiDesigner enabled"
         private const val LOG_DISABLED = "UiDesigner disabled"
         private const val CONFIG_UNREADABLE_WARNING =
-            "config.yml could not be read; leaving it unchanged"
+            "$CONFIG_FILE_NAME could not be read; leaving it unchanged"
         private const val OUTPUT_PATH_INVALID_WARNING =
             "${UiDesignerConfig.OUTPUT_FILE_KEY} is not a valid path; leaving it unchanged"
     }
