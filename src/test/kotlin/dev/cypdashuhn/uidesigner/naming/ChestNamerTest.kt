@@ -84,6 +84,19 @@ class ChestNamerTest {
     }
 
     @Test
+    fun `copper chests are chests and round-trip a name`() {
+        val chest = blockAt(Material.COPPER_CHEST)
+
+        assertTrue(ChestNamer.isChest(chest))
+
+        ChestNamer.setName(chest, "Shop")
+        assertEquals("Shop", ChestNamer.nameOf(chest))
+
+        ChestNamer.clear(chest)
+        assertNull(ChestNamer.nameOf(chest))
+    }
+
+    @Test
     fun `stone is not a chest`() {
         val stone = blockAt(Material.STONE)
 

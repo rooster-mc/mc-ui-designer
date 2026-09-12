@@ -23,7 +23,7 @@ uidesigner/
     ChestContent.kt          capture-side intermediate: chest position + inventory
     ChestCapture.kt          selection lookup + player -> CapturedSelection? (region + contents)
     ChestScanner.kt          region -> list<ChestContent>, filters chest blocks
-    DoubleChestGrouper.kt    merges double-chest halves into one design
+    DoubleChestGrouper.kt    merges double-chest halves; reports clipped halves
   naming/
     ChestNamer.kt            read/write the name of a chest block
   export/
@@ -114,16 +114,35 @@ uidesigner/
   clockwise/counter-clockwise rule is hand-checked against vanilla
   `ChestBlock.getConnectedDirection`, but MockBukkit cannot verify it against
   real chest geometry; that needs the dev server.
-- **Only one half selected (040).** The selection is authoritative, so a chest
-  whose partner half is absent from `contents` stays a single 3-row entry built
-  from that half's own 27 captured slots; the grouper never reads the
-  unselected half. Consumed positions keep a merged double's halves from being
-  emitted twice. The grouper returns `UiChest` with `name = null` and does not
-  order; `UiDesignerCommand` populates names via `ChestNamer.nameOf` at each
-  canonical position, and `JsonExporter` remains the ordering authority.
+- **Clipped double chest is fatal (140).** A chest is knowably half of a double
+  when its `inventory.holder` is a `DoubleChest` (partner positions from
+  `leftSide`/`rightSide`) or its block data `type` is `LEFT`/`RIGHT` (a lone
+  chest is `SINGLE`). If that partner is absent from `contents`,
+  `DoubleChestGrouper.group` returns a `GroupResult` carrying `chests` plus
+  `clipped: List<ClippedHalf>` (the captured `position`, the `partner`, and
+  whether the partner lies inside the selection bounds) instead of emitting a
+  truncated 3-row single. Consumed positions still keep a merged double's halves
+  from being emitted twice. The grouper only classifies a half as clipped when
+  the partner is genuinely absent from `byPosition`: a neighbour that is present
+  but mismatched or already consumed stays a single, as before. `clipped` is
+  non-empty only when the selection is unusable, so `UiDesignerCommand` maps it
+  to `SaveOutcome.ClippedChests` and returns before the exporter, and no file is
+  written. `ClippedHalf.partnerInsideSelection` is false when the partner lies
+  outside the region's min/max bounds, and true when it lies inside them but was
+  skipped (`ChestScanner` only visits `loadedBlockPositions`, so the chunk was
+  unloaded); the command words those two cases distinctly for the player. Nothing
+  reads the world at the absent partner position, so classification never forces
+  an unloaded chunk to load. Chests are `CHEST`, `TRAPPED_CHEST`, and the copper
+  chest variants (`Tag.COPPER_CHESTS`), so a clipped copper double is detected
+  the same way.
+- **Grouper returns `UiChest` with `name = null` and does not order.**
+  `UiDesignerCommand` populates names via `ChestNamer.nameOf` at each canonical
+  position, and `JsonExporter` remains the ordering authority.
 - **Chest predicate duplication.** `ChestScanner` and `ChestNamer` each define
-  their own chest-material check; this is a deliberate carry-over until a third
-  consumer appears, then extract one shared `isChest`.
+  their own chest-material check (`CHEST`/`TRAPPED_CHEST` plus
+  `Tag.COPPER_CHESTS`, whose eight variants are also `Chest`/`ChestData` on this
+  Paper version); this is a deliberate carry-over until a third consumer appears,
+  then extract one shared `isChest`.
 - **`UiDesignerCommand`** is the integration point for `/uidesigner save |
   reload | help`. It composes `ChestCapture`, `DoubleChestGrouper`,
   `ChestNamer`, and `JsonExporter` without owning their logic, and injects a
@@ -166,11 +185,13 @@ player + FAWE selection
         ▼
   CapturedSelection?          (region + List<ChestContent>, one per chest *block*;
         │                      empty contents = selection had no chests)
-        │  DoubleChestGrouper(selection.region, selection.contents)
+        │  DoubleChestGrouper.group(selection.region, selection.contents)
         │  -> region.blockAt(position)
         ▼
-  List<UiChest>               (double chests merged; names still null)
-        │  UiDesignerCommand: ChestNamer.nameOf at each canonical position
+  GroupResult                 (chests: List<UiChest>, names still null;
+        │                      clipped: List<ClippedHalf>)
+        │  UiDesignerCommand: clipped -> ClippedChests (no export)
+        │                     else ChestNamer.nameOf at each canonical position
         ▼
   List<UiChest>               (names populated)
         │  JsonExporter

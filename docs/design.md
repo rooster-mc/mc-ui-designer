@@ -97,7 +97,8 @@ Out of scope (backlog):
   plain text. Both halves of a double chest are named/cleared together, and
   `nameOf` reads the first named half. If one half is in an unloaded chunk,
   Bukkit does not report a `DoubleChest`, so `/chest-edit` only names or clears
-  the loaded half; 040 and the exporter likewise only see loaded halves.
+  the loaded half; the exporter likewise only sees loaded halves and, since 140,
+  fails closed when a double chest's other half is missing (see below).
   `/chest-edit clear` (case-insensitive, surrounding whitespace trimmed) is
   reserved for removal and blank input also clears, so a literal name "clear"
   is unreachable. Clearing an already-unnamed chest reports that there is
@@ -106,11 +107,15 @@ Out of scope (backlog):
   holder), `nameOf` sees only the canonical half, so a name on the other half
   is not exported; carrying both merged positions out of the grouper is
   deferred.
-- **One half selected:** a chest whose partner half is outside the selection is
-  exported as a single 3-row chest from the selected half only. The selection
-  is authoritative, so the grouper never reads an unselected half. A merged
-  double reads the shared 54-slot inventory once and uses the lower half
-  position as canonical.
+- **One half selected:** a chest whose partner half is missing from the
+  selection is a clipped double, so the export fails closed: it reports the
+  captured and partner blocks and writes no file. The selection is
+  authoritative, so the grouper never reads an unselected half. A merged double
+  reads the shared 54-slot inventory once and uses the lower half position as
+  canonical.
+- **Chest materials:** `CHEST`, `TRAPPED_CHEST`, and the copper chest variants
+  (`Tag.COPPER_CHESTS`) are all treated as chests by the scanner and
+  `/chest-edit`; every one maps to `Chest`/`ChestData` and can form a double.
 
 ## Naming
 

@@ -2,6 +2,7 @@ package dev.cypdashuhn.uidesigner.capture
 
 import dev.rooster.region.Region
 import org.bukkit.Material
+import org.bukkit.Tag
 import org.bukkit.block.Chest
 
 object ChestScanner {
@@ -11,11 +12,14 @@ object ChestScanner {
         region.loadedBlockPositions
             .mapNotNull { position ->
                 val block = region.blockAt(position)
-                if (block.type !in CHEST_MATERIALS) return@mapNotNull null
+                if (!block.type.isChestMaterial()) return@mapNotNull null
                 val chest = block.state as? Chest ?: return@mapNotNull null
                 ChestContent(
                     position = position,
                     items = chest.blockInventory.contents.map { it?.clone() },
                 )
             }.toList()
+
+    private fun Material.isChestMaterial(): Boolean =
+        this in CHEST_MATERIALS || Tag.COPPER_CHESTS.isTagged(this)
 }

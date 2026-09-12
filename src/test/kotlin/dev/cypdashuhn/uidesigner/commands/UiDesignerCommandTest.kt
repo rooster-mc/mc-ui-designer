@@ -1,5 +1,6 @@
 package dev.cypdashuhn.uidesigner.commands
 
+import dev.cypdashuhn.uidesigner.capture.ClippedHalf
 import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.cypdashuhn.uidesigner.export.DesignJson
@@ -150,6 +151,139 @@ class UiDesignerCommandTest {
         assertEquals(1, exportedChests.size)
         assertEquals(6, exportedChests.single().rows)
         assertNull(exportedChests.single().name)
+    }
+
+    @Test
+    fun `save reports a clipped double chest and writes no file`(
+        @TempDir directory: Path
+    ) {
+        clippedHalfChest(0, 0)
+        var exporterCalls = 0
+        val output = directory.resolve("design.json")
+
+        val outcome =
+            unregisteredCommand(
+                region = region(0, 0, 0, 0, 0, 0),
+                outputFile = output,
+                exporter = { _, _ -> exporterCalls++ },
+            ).save(player)
+
+        assertEquals(
+            UiDesignerCommand.SaveOutcome.ClippedChests(
+                listOf(
+                    ClippedHalf(
+                        position = BlockPos(0, 0, 0),
+                        partner = BlockPos(1, 0, 0),
+                        partnerInsideSelection = false,
+                    ),
+                ),
+            ),
+            outcome,
+        )
+        assertEquals(0, exporterCalls)
+        assertFalse(Files.exists(output))
+    }
+
+    @Test
+    fun `save aborts on clipped halves even when a valid chest is present`(
+        @TempDir directory: Path
+    ) {
+        clippedHalfChest(0, 0)
+        val valid = blockAt(Material.CHEST, 2, 0, 0)
+        (valid.state as Chest).blockInventory.setItem(0, ItemStack(Material.STONE))
+        clippedHalfChest(4, 0)
+        var exporterCalls = 0
+        val output = directory.resolve("design.json")
+
+        val outcome =
+            unregisteredCommand(
+                region = region(0, 0, 0, 5, 0, 0),
+                outputFile = output,
+                exporter = { _, _ -> exporterCalls++ },
+            ).save(player)
+
+        assertEquals(
+            UiDesignerCommand.SaveOutcome.ClippedChests(
+                listOf(
+                    ClippedHalf(BlockPos(0, 0, 0), BlockPos(1, 0, 0), true),
+                    ClippedHalf(BlockPos(4, 0, 0), BlockPos(5, 0, 0), true),
+                ),
+            ),
+            outcome,
+        )
+        assertEquals(0, exporterCalls)
+        assertFalse(Files.exists(output))
+    }
+
+    @Test
+    fun `save aborts on a clipped copper double chest`() {
+        clippedHalfChest(0, 0, Material.COPPER_CHEST)
+        var exporterCalls = 0
+
+        val outcome =
+            unregisteredCommand(
+                region = region(0, 0, 0, 0, 0, 0),
+                exporter = { _, _ -> exporterCalls++ },
+            ).save(player)
+
+        assertEquals(
+            UiDesignerCommand.SaveOutcome.ClippedChests(
+                listOf(ClippedHalf(BlockPos(0, 0, 0), BlockPos(1, 0, 0), false)),
+            ),
+            outcome,
+        )
+        assertEquals(0, exporterCalls)
+    }
+
+    @Test
+    fun `dispatch of save reports the clipped half and its outside partner`() {
+        clippedHalfChest(0, 0)
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(plugin, region(0, 0, 0, 0, 0, 0))
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
+
+        val message = plainMessage()
+        assertTrue(message.contains("(0, 0, 0)"))
+        assertTrue(message.contains("(1, 0, 0)"))
+        assertTrue(message.contains("outside your selection"))
+        assertTrue(message.contains("Expand the selection to include both halves"))
+    }
+
+    @Test
+    fun `dispatch of save reports a partner half that was not captured`() {
+        clippedHalfChest(15, 0)
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(plugin, region(15, 0, 0, 16, 0, 0))
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
+
+        val message = plainMessage()
+        assertTrue(message.contains("(15, 0, 0)"))
+        assertTrue(message.contains("(16, 0, 0)"))
+        assertTrue(message.contains("chunk is not loaded"))
+        assertTrue(message.contains("shrink the selection"))
+    }
+
+    @Test
+    fun `clipped message names the first half and mentions the rest`() {
+        val message =
+            PlainTextComponentSerializer
+                .plainText()
+                .serialize(
+                    clippedChestsMessage(
+                        listOf(
+                            ClippedHalf(BlockPos(0, 0, 0), BlockPos(1, 0, 0), false),
+                            ClippedHalf(BlockPos(5, 0, 0), BlockPos(6, 0, 0), false),
+                        ),
+                    ),
+                )
+
+        assertTrue(message.contains("(0, 0, 0)"))
+        assertTrue(message.contains("(1, 0, 0)"))
+        assertTrue(message.contains("1 more chest is also clipped"))
     }
 
     @Test
@@ -535,6 +669,15 @@ class UiDesignerCommandTest {
 
     private fun blockAt(material: Material, x: Int, y: Int, z: Int): Block =
         world.getBlockAt(x, y, z).apply { type = material }
+
+    private fun clippedHalfChest(x: Int, z: Int, material: Material = Material.CHEST): Block =
+        blockAt(material, x, 0, z).apply {
+            blockData =
+                ChestDataMock(material).apply {
+                    type = ChestData.Type.LEFT
+                    facing = BlockFace.NORTH
+                }
+        }
 
     private fun region(minX: Int, minY: Int, minZ: Int, maxX: Int, maxY: Int, maxZ: Int): Region =
         Region(

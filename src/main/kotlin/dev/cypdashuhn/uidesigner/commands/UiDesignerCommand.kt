@@ -1,6 +1,7 @@
 package dev.cypdashuhn.uidesigner.commands
 
 import dev.cypdashuhn.uidesigner.capture.ChestCapture
+import dev.cypdashuhn.uidesigner.capture.ClippedHalf
 import dev.cypdashuhn.uidesigner.capture.DoubleChestGrouper
 import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
@@ -39,6 +40,10 @@ class UiDesignerCommand(
         data class WriteFailed(
             val outputFile: Path?,
             val reason: String?,
+        ) : SaveOutcome
+
+        data class ClippedChests(
+            val clipped: List<ClippedHalf>,
         ) : SaveOutcome
 
         data class InvalidOutputFile(
@@ -82,8 +87,9 @@ class UiDesignerCommand(
             ChestCapture.capture(selectionProvider, player) ?: return SaveOutcome.NoSelection
         if (selection.contents.isEmpty()) return SaveOutcome.NoChests
         val grouped = DoubleChestGrouper.group(selection.region, selection.contents)
+        if (grouped.clipped.isNotEmpty()) return SaveOutcome.ClippedChests(grouped.clipped)
         val named =
-            grouped.map { chest ->
+            grouped.chests.map { chest ->
                 chest.copy(
                     name = chest.position?.let { position -> nameAt(selection.region, position) },
                 )
@@ -124,6 +130,7 @@ class UiDesignerCommand(
             SaveOutcome.NoSelection -> noSelectionMessage()
             SaveOutcome.NoChests -> noChestsMessage()
             is SaveOutcome.WriteFailed -> writeFailedMessage(outcome.outputFile, outcome.reason)
+            is SaveOutcome.ClippedChests -> clippedChestsMessage(outcome.clipped)
             is SaveOutcome.InvalidOutputFile -> invalidOutputFileMessage(outcome.reason)
         }
 
@@ -166,6 +173,32 @@ internal fun noChestsMessage(): Component =
         "The selection contains no chests. Place chests inside the selected region " +
             "(loaded chunks only).",
     )
+
+internal fun clippedChestsMessage(clipped: List<ClippedHalf>): Component {
+    val first = clipped.first()
+    val rest = clipped.size - 1
+    val others =
+        if (rest == 0) {
+            ""
+        } else {
+            " $rest more ${if (rest == 1) "chest is" else "chests are"} also clipped."
+        }
+    val detail =
+        if (first.partnerInsideSelection) {
+            "the chest at ${first.position.coords()} is half of a double chest whose other half " +
+                "at ${first.partner.coords()} is inside your selection but was not captured " +
+                "because its chunk is not loaded; move near ${first.partner.coords()} to load " +
+                "that chunk and try again, or shrink the selection so neither half of this " +
+                "double chest is selected."
+        } else {
+            "the chest at ${first.position.coords()} is half of a double chest whose other half " +
+                "at ${first.partner.coords()} is outside your selection. " +
+                "Expand the selection to include both halves."
+        }
+    return Messages.styled(Messages.errorColor, "Cannot export: $detail$others")
+}
+
+private fun BlockPos.coords(): String = "($x, $y, $z)"
 
 internal fun writeFailedMessage(outputFile: Path?, reason: String?): Component {
     val target = outputFile?.let { " to $it" } ?: ""

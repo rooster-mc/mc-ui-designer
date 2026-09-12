@@ -3,6 +3,7 @@ package dev.cypdashuhn.uidesigner.naming
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.Material
+import org.bukkit.Tag
 import org.bukkit.block.Block
 import org.bukkit.block.Chest
 import org.bukkit.block.DoubleChest
@@ -10,7 +11,9 @@ import org.bukkit.inventory.InventoryHolder
 
 object ChestNamer {
     fun isChest(block: Block): Boolean =
-        block.type == Material.CHEST || block.type == Material.TRAPPED_CHEST
+        block.type == Material.CHEST ||
+            block.type == Material.TRAPPED_CHEST ||
+            Tag.COPPER_CHESTS.isTagged(block.type)
 
     fun nameOf(block: Block): String? = nameOf(chestsOf(block))
 

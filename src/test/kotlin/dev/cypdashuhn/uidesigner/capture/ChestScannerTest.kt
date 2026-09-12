@@ -106,6 +106,19 @@ class ChestScannerTest {
     }
 
     @Test
+    fun `copper chest variants are captured`() {
+        blockAt(Material.COPPER_CHEST, 0, 0, 0)
+        blockAt(Material.WAXED_OXIDIZED_COPPER_CHEST, 1, 0, 0)
+
+        val captured = captureSelection(region(0, 0, 0, 1, 0, 0))
+
+        assertEquals(
+            listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)),
+            captured.contents.map { it.position },
+        )
+    }
+
+    @Test
     fun `item material and custom name are read from the slot they occupy`() {
         val chest = blockAt(Material.CHEST, 0, 0, 0).state as Chest
         chest.blockInventory.setItem(5, namedItem(Material.STONE, "Stone"))

@@ -16,7 +16,9 @@ import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -52,8 +54,9 @@ class DoubleChestGrouperTest {
 
         val result = DoubleChestGrouper.group(region(0, 0, 0, 0), listOf(content(chest)))
 
-        assertEquals(1, result.size)
-        val ui = result.single()
+        assertEquals(1, result.chests.size)
+        assertTrue(result.clipped.isEmpty())
+        val ui = result.chests.single()
         assertEquals(3, ui.rows)
         assertNull(ui.name)
         assertEquals(BlockPos(0, 0, 0), ui.position)
@@ -79,12 +82,21 @@ class DoubleChestGrouperTest {
         right.inventory.setItem(0, ItemStack(Material.DIRT))
 
         val result =
-            DoubleChestGrouper.group(region(0, 0, 1, 0), listOf(content(left), content(right)))
+            DoubleChestGrouper.group(
+                region(0, 0, 1, 0),
+                listOf(content(left), content(right)),
+            )
 
-        assertEquals(2, result.size)
-        assertEquals(listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)), result.map { it.position })
-        assertEquals(listOf(3, 3), result.map { it.rows })
-        assertEquals(listOf("minecraft:stone", "minecraft:dirt"), result.map { it.firstItem() })
+        assertEquals(2, result.chests.size)
+        assertEquals(
+            listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)),
+            result.chests.map { it.position },
+        )
+        assertEquals(listOf(3, 3), result.chests.map { it.rows })
+        assertEquals(
+            listOf("minecraft:stone", "minecraft:dirt"),
+            result.chests.map { it.firstItem() },
+        )
     }
 
     @Test
@@ -118,9 +130,13 @@ class DoubleChestGrouperTest {
                 listOf(content(single), content(mismatched)),
             )
 
-        assertEquals(2, result.size)
-        assertEquals(listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)), result.map { it.position })
-        assertEquals(listOf(3, 3), result.map { it.rows })
+        assertEquals(2, result.chests.size)
+        assertTrue(result.clipped.isEmpty())
+        assertEquals(
+            listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)),
+            result.chests.map { it.position },
+        )
+        assertEquals(listOf(3, 3), result.chests.map { it.rows })
     }
 
     @Test
@@ -139,8 +155,9 @@ class DoubleChestGrouperTest {
                 listOf(content(left, items.take(27)), content(right, items.drop(27))),
             )
 
-        assertEquals(1, result.size)
-        val ui = result.single()
+        assertEquals(1, result.chests.size)
+        assertTrue(result.clipped.isEmpty())
+        val ui = result.chests.single()
         assertEquals(6, ui.rows)
         assertEquals(BlockPos(0, 0, 0), ui.position)
 
@@ -167,7 +184,8 @@ class DoubleChestGrouperTest {
                 listOf(content(left, items.take(27)), content(right, items.drop(27))),
             )
 
-        val slots = result.single().content.slotItems()
+        val ui = result.chests.single()
+        val slots = ui.content.slotItems()
         assertEquals(52, slots.size)
         assertNull(slots[3 to 9])
         assertNull(slots[4 to 1])
@@ -234,8 +252,8 @@ class DoubleChestGrouperTest {
                 listOf(content(left, leftItems), content(right, rightItems)),
             )
 
-        assertEquals(1, result.size)
-        val ui = result.single()
+        assertEquals(1, result.chests.size)
+        val ui = result.chests.single()
         assertEquals(6, ui.rows)
         val slots = ui.content.slotItems()
         assertEquals(4, slots.size)
@@ -246,7 +264,7 @@ class DoubleChestGrouperTest {
     }
 
     @Test
-    fun `only one half selected is treated as a single chest`() {
+    fun `a holder-linked half with its partner outside the selection is clipped`() {
         val items = filledItems(54)
         val left = fakeChest(0, 0)
         val right = fakeChest(1, 0)
@@ -256,16 +274,61 @@ class DoubleChestGrouperTest {
         half[8] = ItemStack(Material.DIRT)
 
         val result =
+            DoubleChestGrouper.group(region(0, 0, 0, 0), listOf(content(left, half)))
+
+        assertTrue(result.chests.isEmpty())
+        val clipped = result.clipped.single()
+        assertEquals(BlockPos(0, 0, 0), clipped.position)
+        assertEquals(BlockPos(1, 0, 0), clipped.partner)
+        assertFalse(clipped.partnerInsideSelection)
+    }
+
+    @Test
+    fun `a holder-linked half with its partner inside the selection is clipped`() {
+        val items = filledItems(54)
+        val left = fakeChest(0, 0)
+        val right = fakeChest(1, 0)
+        installDouble(left, right, items)
+        val half = MutableList<ItemStack?>(27) { null }
+
+        val result =
             DoubleChestGrouper.group(region(0, 0, 1, 0), listOf(content(left, half)))
 
-        assertEquals(1, result.size)
-        val ui = result.single()
-        assertEquals(3, ui.rows)
-        assertEquals(BlockPos(0, 0, 0), ui.position)
-        assertEquals(
-            mapOf((1 to 1) to "minecraft:stone", (1 to 9) to "minecraft:dirt"),
-            ui.content.slotItems(),
-        )
+        assertTrue(result.chests.isEmpty())
+        val clipped = result.clipped.single()
+        assertEquals(BlockPos(0, 0, 0), clipped.position)
+        assertEquals(BlockPos(1, 0, 0), clipped.partner)
+        assertTrue(clipped.partnerInsideSelection)
+    }
+
+    @Test
+    fun `a geometry half with its partner outside the selection is clipped`() {
+        val left = geometryChest(0, 0, BlockFace.NORTH, ChestData.Type.LEFT)
+        val half = MutableList<ItemStack?>(27) { null }
+
+        val result =
+            DoubleChestGrouper.group(region(0, 0, 0, 0), listOf(content(left, half)))
+
+        assertTrue(result.chests.isEmpty())
+        val clipped = result.clipped.single()
+        assertEquals(BlockPos(0, 0, 0), clipped.position)
+        assertEquals(BlockPos(1, 0, 0), clipped.partner)
+        assertFalse(clipped.partnerInsideSelection)
+    }
+
+    @Test
+    fun `a geometry half with its partner inside the selection is clipped`() {
+        val left = geometryChest(0, 0, BlockFace.NORTH, ChestData.Type.LEFT)
+        val half = MutableList<ItemStack?>(27) { null }
+
+        val result =
+            DoubleChestGrouper.group(region(0, 0, 1, 0), listOf(content(left, half)))
+
+        assertTrue(result.chests.isEmpty())
+        val clipped = result.clipped.single()
+        assertEquals(BlockPos(0, 0, 0), clipped.position)
+        assertEquals(BlockPos(1, 0, 0), clipped.partner)
+        assertTrue(clipped.partnerInsideSelection)
     }
 
     @Test
@@ -287,24 +350,29 @@ class DoubleChestGrouperTest {
                 ),
             )
 
-        assertEquals(2, result.size)
-        assertEquals(listOf(BlockPos(0, 0, 0), BlockPos(5, 0, 0)), result.map { it.position })
-        assertEquals(listOf(6, 3), result.map { it.rows })
-        assertEquals(54, result[0].content.sumOf { it.slots.size })
-        assertEquals(1, result[1].content.sumOf { it.slots.size })
+        assertEquals(2, result.chests.size)
+        assertEquals(
+            listOf(BlockPos(0, 0, 0), BlockPos(5, 0, 0)),
+            result.chests.map { it.position },
+        )
+        assertEquals(listOf(6, 3), result.chests.map { it.rows })
+        assertEquals(54, result.chests[0].content.sumOf { it.slots.size })
+        assertEquals(1, result.chests[1].content.sumOf { it.slots.size })
     }
 
-    private fun groupDouble(reversed: Boolean) =
+    private fun groupDouble(reversed: Boolean): List<UiChest> =
         run {
             val items = filledItems(54)
             val left = fakeChest(0, 0)
             val right = fakeChest(1, 0)
             installDouble(left, right, items)
             val contents = listOf(content(left, items.take(27)), content(right, items.drop(27)))
-            DoubleChestGrouper.group(
-                region(0, 0, 1, 0),
-                if (reversed) contents.reversed() else contents
-            )
+            val grouped =
+                DoubleChestGrouper.group(
+                    region(0, 0, 1, 0),
+                    if (reversed) contents.reversed() else contents,
+                )
+            grouped.chests
         }
 
     private fun assertOrientationMerges(
@@ -332,8 +400,8 @@ class DoubleChestGrouperTest {
                 contents,
             )
 
-        assertEquals(1, result.size)
-        val ui = result.single()
+        assertEquals(1, result.chests.size)
+        val ui = result.chests.single()
         assertEquals(6, ui.rows)
         assertEquals(54, ui.content.sumOf { it.slots.size })
         assertEquals(BlockPos(minOf(0, dx), 0, minOf(0, dz)), ui.position)
