@@ -59,3 +59,41 @@ which this change moved into the library.
   canonical position) is about `JsonExporter` and is unchanged. `docs/fcp.md`
   only uses `class ChestScanner` as a frontmatter example; no coverage claim
   changed. `docs/manual-test.md` cites no scan loop.
+
+## Round 2
+### Verdict
+Ship. The round-1 finding is fixed: `docs/architecture.md:69-70` now attributes
+the walk to the library (`consuming the library's Region.loadedBlockPositions`)
+and calls the plugin's role *scanning*, so the bullet reads consistently with
+the `loadedBlockPositions` sentence at lines 74-77 and with `ChestScanner.kt`.
+No new architecture-scope findings.
+
+### Findings
+No findings.
+
+### Non-findings
+- **Round-1 finding 1 is resolved.** The stale "only place that *enumerates*
+  blocks" wording is gone; the responsibility split is now explicit and correct:
+  the library owns the coordinate walk (`Region.loadedBlockPositions`,
+  `../rooster-region/.../Region.kt:120-139`) and `ChestScanner.kt:10-20` owns
+  scanning/filtering and inventory reads. I concur with the fix.
+- **The architecture doc reads consistently end to end after the fix.** The
+  `Region.blockAt(BlockPos)` sentence (`docs/architecture.md:60-62`), the
+  `ChestScanner` bullet (69-85), the grouper contract (86-93), the ordering
+  authority (`JsonExporter`, lines 154-156) and the data-flow diagram
+  (158-179) no longer contradict each other, and no other occurrence of
+  "enumerat"/"triple"/"ordered by"/"getBlockAt" remains in a maintained doc.
+- **`docs/manual-test.md:21` (MT-010) is a consistent addition, not a
+  contradiction.** It names ticket 120 and the library-backed enumeration and
+  leaves `docs/architecture.md`'s claims intact; the manual gate is now tracked
+  as `docs/workflow.md` requires. No architecture doc needed an update for it.
+- **Tester's cardinality fix and MT-010, and readability/correctness
+  non-findings, are outside my scope but do not disturb the seams.** The
+  `ChestScannerTest` changes stay behind the `Region`/`ChestScanner` boundary
+  and introduce no new production dependency or package.
+- **No remaining staleness this ticket introduced.** `docs/design.md` (lines
+  98-100) still matches the loaded-chunk scan semantics, `docs/data-format.md`
+  ordering still rests on `JsonExporter`, and `docs/fcp.md` still covers the
+  file by its unchanged `class ChestScanner` match. The only redundancy is the
+  twice-stated `Region.loadedBlockPositions` in the `ChestScanner` bullet
+  (lines 69-70 and 74), which is emphasis, not staleness.

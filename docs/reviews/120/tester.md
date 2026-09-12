@@ -61,3 +61,44 @@ ticket 120 for the live double-chest/chunk-loading path MockBukkit cannot model.
   warranted.
 - "No TODO remains" is a static check, not a meaningful unit test; no test
   belongs here for it.
+
+## Round 2
+### Verdict
+Ship. Both round-1 tester findings are fixed correctly, and the fixes introduce
+no new test-quality or harness-fidelity issues. The suite still covers the
+acceptance criterion (same positions, same cloned contents) at the right layer,
+and the live-server path is now tracked.
+
+### Findings
+None.
+
+### Non-findings
+- **Concur — round-1 finding 1 is resolved.** `several single chests are
+  captured` (`ChestScannerTest.kt:57-76`) keeps the order-independent set
+  comparison and now pins cardinality with `assertEquals(expected.size,
+  positions.size)` (line 75), so a duplicated position would fail while the
+  library's enumeration order remains free to change. This is exactly the
+  suggested direction; no order-sensitive assertion was reintroduced.
+- **Concur — round-1 finding 2 is resolved.** `docs/manual-test.md:21` adds
+  `MT-010 | 120 | ...` with the live-server scan-parity check and the
+  `unverified` status, naming the ticket and covering the real
+  `DoubleChest`/chunk-loading path MockBukkit cannot model. The row is distinct
+  from MT-001/MT-003 (it targets this ticket's enumeration swap and the
+  once-with-cloned-contents contract), so it is tracked rather than duplicated.
+- **The other reviewers are addressed or stand.** Architecture's round-1 finding
+  is fixed at `docs/architecture.md:69` ("scans blocks (consuming the library's
+  `Region.loadedBlockPositions`)"), removing the misattribution; correctness and
+  readability raised no findings and I have nothing to add within my scope.
+- **No new test-coverage gap.** Round 1's new/rewritten cases are intact:
+  cross-chunk enumeration (`ChestScannerTest.kt:78-90`), unloaded-chunk skip with
+  a surviving loaded entry (`:155-165`), negative floor chunk lookup (`:145-153`),
+  clone independence (`:108-122`), and separate per-half 27-slot entries
+  (`:124-143`). "No TODO remains" needs no test. The cross-chunk test asserts a
+  two-element set without its own cardinality check, which is acceptable: the
+  duplicate-detection concern is already covered by the cardinality-pinned
+  single-chunk test, and adding a matching count there would be redundant.
+- **MT-010's wording is adequate.** "A chest in an adjacent unloaded chunk" is
+  not literally reachable while online (placing a chest loads its chunk), but the
+  entry's substantive checks — one enumeration per chest block, cloned contents,
+  halves kept separate — are the point of the gate, and the automated test covers
+  the unloaded-skip mechanics. Not worth a text change.

@@ -59,3 +59,39 @@ None.
   `docs/architecture.md` scan-loop description is updated consistently with the
   implementation. Return type remains `List<ChestContent>` consumed unchanged by
   `ChestCapture.kt:12-13`, so no integration seam moved.
+
+## Round 2
+### Verdict
+Ship. The round-1 fixes landed in `852c8e6` and none of them touches the
+production path; `src/main/kotlin/.../ChestScanner.kt` is byte-identical to the
+revision I reviewed in round 1, so every round-1 correctness check still holds.
+No new findings.
+
+### Findings
+None.
+
+### Non-findings
+- **Concur with round-1 tester finding 1 (duplicate detection), now fixed.**
+  `ChestScannerTest.kt:74-75` asserts both set equality and
+  `expected.size == positions.size`, so a duplicated enumeration is caught even
+  if the set still matches. The assertion stays order-independent, consistent
+  with the ticket allowing the enumeration order to change.
+- **Concur with round-1 tester finding 2 (manual gate), now fixed.**
+  `docs/manual-test.md` `MT-010` names ticket 120 and covers the live-server
+  parity path (double chest across a chunk border + unloaded-neighbour chunk)
+  that MockBukkit cannot model. This is a test-coverage/tracking concern, not a
+  production data-contract change, so it does not alter my verdict.
+- **Concur with round-1 architecture finding (doc rewording), now fixed.**
+  `docs/architecture.md` attributes enumeration to the library
+  (`Region.loadedBlockPositions`) and only scanning/inventory reads to
+  `ChestScanner`; the wording matches the code, so the documented scan contract
+  remains accurate.
+- **No production regression from the fixes.** The commit's diff to
+  `ChestScanner.kt` is exactly the round-1 version (filter/cast/cloning and
+  `loadedBlockPositions` iteration unchanged), and the other three files are
+  docs/tests. Enumeration completeness, chunk-major order being unobservable,
+  `isChunkLoaded` equivalence, `BlockPos` sourcing, and the unchanged clone
+  semantics from Round 1 all still stand.
+- **No new integration seam or data-format change.** `ChestCapture.kt` still
+  consumes `List<ChestContent>` unchanged, and `docs/data-format.md` is
+  untouched; the exporter remains the ordering authority.

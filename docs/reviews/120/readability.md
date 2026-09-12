@@ -31,3 +31,34 @@ None.
 - The order-mixing between `setOf` (new/renamed tests) and `listOf` (pre-existing
   single-chunk tests) is a test-assertion-strength concern, which belongs to the
   tester, not readability.
+
+## Round 2
+### Verdict
+Ship. The tester's cardinality assertion and the architecture doc rewording
+landed without adding any readability cost; re-checked imports, dead code, line
+length, and test naming are all still clean.
+
+### Findings
+None.
+
+### Non-findings
+- Concur with tester finding 1's fix: the extra `positions`/`expected` locals and
+  the second `assertEquals(expected.size, positions.size)` make the duplicate
+  check explicit. `val expected =` followed by an indented `setOf(...)` is the
+  form ktlint's multiline-expression-wrapping requires for a wrapped right-hand
+  side, so it is both lint-clean and readable; the locals are named for what they
+  hold, and the two assertions are one line each.
+- `ChestScanner.kt` is unchanged since round 1 and still hygiene-clean: no `TODO`
+  (`grep` returns nothing), only `Region`, `Material`, and `Chest` imported (all
+  used), no leftover `BlockPos` import or dead code, and the
+  `loadedBlockPositions → mapNotNull → toList` chain still reads top-to-bottom.
+- `ChestScannerTest.kt` still has no unused imports: `assertTrue` is gone and
+  every remaining import (`BlockPos`, `assertEquals`, `assertFalse`, `assertNull`)
+  is referenced; the renamed/new backticked-sentence test names from round 1 are
+  unchanged and still describe the assertions.
+- No Kotlin line exceeds `.editorconfig`'s 100-char limit. The only over-100 lines
+  in the touched docs are the pre-existing markdown table rows in
+  `docs/manual-test.md` (including the new `MT-010`), and `.editorconfig` scopes
+  `max_line_length` to `*.{kt,kts}` only.
+- The architecture doc rewording (round-1 finding 1) is outside readability
+  scope; nothing about it affects the source's structure or naming.
