@@ -41,7 +41,7 @@ class ChestScannerTest {
 
     @Test
     fun `no selection captures nothing`() {
-        assertNull(ChestCapture.capture(FakeSelectionSource(null), player))
+        assertNull(ChestCapture.capture({ null }, player))
     }
 
     @Test
@@ -51,7 +51,7 @@ class ChestScannerTest {
 
         assertEquals(
             emptyList<ChestContent>(),
-            capture(FakeSelectionSource(region(0, 0, 0, 1, 0, 0))).contents,
+            captureSelection(region(0, 0, 0, 1, 0, 0)).contents,
         )
     }
 
@@ -62,7 +62,7 @@ class ChestScannerTest {
         blockAt(Material.CHEST, 0, 2, 0)
         blockAt(Material.CHEST, 0, 0, 0)
 
-        val captured = capture(FakeSelectionSource(region(0, 0, 0, 2, 2, 2)))
+        val captured = captureSelection(region(0, 0, 0, 2, 2, 2))
 
         assertEquals(
             listOf(
@@ -83,7 +83,7 @@ class ChestScannerTest {
         blockAt(Material.SHULKER_BOX, 3, 0, 0)
         blockAt(Material.STONE, 4, 0, 0)
 
-        val captured = capture(FakeSelectionSource(region(0, 0, 0, 4, 0, 0)))
+        val captured = captureSelection(region(0, 0, 0, 4, 0, 0))
 
         assertEquals(
             listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)),
@@ -96,7 +96,7 @@ class ChestScannerTest {
         val chest = blockAt(Material.CHEST, 0, 0, 0).state as Chest
         chest.blockInventory.setItem(5, namedItem(Material.STONE, "Stone"))
 
-        val content = capture(FakeSelectionSource(region(0, 0, 0, 0, 0, 0))).contents.single()
+        val content = captureSelection(region(0, 0, 0, 0, 0, 0)).contents.single()
 
         assertEquals(27, content.items.size)
         assertNull(content.items[0])
@@ -114,7 +114,7 @@ class ChestScannerTest {
         left.blockInventory.setItem(0, ItemStack(Material.STONE))
         right.blockInventory.setItem(0, ItemStack(Material.DIRT))
 
-        val captured = capture(FakeSelectionSource(region(0, 0, 0, 1, 0, 0))).contents
+        val captured = captureSelection(region(0, 0, 0, 1, 0, 0)).contents
 
         assertEquals(
             listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0)),
@@ -133,7 +133,7 @@ class ChestScannerTest {
         world.getChunkAt(-2, -2)
         blockAt(Material.CHEST, -17, 0, -17)
 
-        val captured = capture(FakeSelectionSource(region(-17, 0, -17, -17, 0, -17)))
+        val captured = captureSelection(region(-17, 0, -17, -17, 0, -17))
 
         assertEquals(listOf(BlockPos(-17, 0, -17)), captured.contents.map { it.position })
     }
@@ -144,12 +144,12 @@ class ChestScannerTest {
 
         assertFalse(world.isChunkLoaded(1, 0))
         assertTrue(
-            capture(FakeSelectionSource(region(16, 0, 0, 16, 0, 0))).contents.isEmpty(),
+            captureSelection(region(16, 0, 0, 16, 0, 0)).contents.isEmpty(),
         )
     }
 
-    private fun capture(source: SelectionSource): CapturedSelection =
-        checkNotNull(ChestCapture.capture(source, player))
+    private fun captureSelection(selection: Region?): CapturedSelection =
+        checkNotNull(ChestCapture.capture({ selection }, player))
 
     private fun namedItem(material: Material, name: String): ItemStack {
         val item = ItemStack(material)
@@ -170,10 +170,4 @@ class ChestScannerTest {
 
     private fun blockAt(material: Material, x: Int, y: Int, z: Int): Block =
         world.getBlockAt(x, y, z).apply { type = material }
-
-    private class FakeSelectionSource(
-        private val region: Region?
-    ) : SelectionSource {
-        override fun selectionOf(player: Player): Region? = region
-    }
 }
