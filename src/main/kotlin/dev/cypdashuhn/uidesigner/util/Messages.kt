@@ -17,9 +17,9 @@ object Messages {
 
     private const val HELP_TEXT =
         "UiDesigner commands:\n" +
-            "/uidesigner save (op) - export the selected chest designs to JSON.\n" +
-            "/uidesigner reload (op) - reload config.yml.\n" +
-            "/chest-edit <name> (op) - name or clear the chest you are looking at.\n" +
+            "/uidesigner save - export the selected chest designs to JSON.\n" +
+            "/uidesigner reload - reload config.yml.\n" +
+            "/chest-edit <name> - name or clear the chest you are looking at.\n" +
             "/uidesigner help - show this help."
 
     private const val WRITE_FAILURE_HINT = "check that the output folder exists and is writable"
@@ -96,9 +96,6 @@ object Messages {
             "Usage: /chest-edit <name> - name the chest you are looking at, " +
                 "or /chest-edit clear to remove the name.",
         )
-
-    fun noPermission(node: String): Component =
-        styled(errorColor, "You do not have permission to use this command ($node).")
 
     private fun styled(color: TextColor, body: String): Component =
         styled(color, Component.text(body))

@@ -56,7 +56,6 @@ class MessagesTest {
         assertEquals(NamedTextColor.RED, Messages.reloadFailed("bad config").color())
         assertEquals(NamedTextColor.RED, Messages.chestEditNoTarget().color())
         assertEquals(NamedTextColor.RED, Messages.chestEditNotAChest().color())
-        assertEquals(NamedTextColor.RED, Messages.noPermission("uidesigner.save").color())
     }
 
     @Test
@@ -67,13 +66,12 @@ class MessagesTest {
     }
 
     @Test
-    fun `help lists the subcommands and the op-only marker`() {
+    fun `help lists the subcommands`() {
         val text = plain(Messages.help())
         assertTrue(text.contains("save"))
         assertTrue(text.contains("reload"))
         assertTrue(text.contains("help"))
         assertTrue(text.contains("chest-edit"))
-        assertTrue(text.contains("(op)"))
     }
 
     @Test
@@ -87,13 +85,6 @@ class MessagesTest {
     @Test
     fun `save success uses the singular for one design`() {
         assertTrue(plain(Messages.saveSuccess(1, path)).contains("1 chest design"))
-    }
-
-    @Test
-    fun `no permission names the required node`() {
-        val text = plain(Messages.noPermission("uidesigner.save"))
-        assertTrue(text.contains("permission"))
-        assertTrue(text.contains("uidesigner.save"))
     }
 
     @Test
@@ -174,7 +165,6 @@ class MessagesTest {
             "chestEditNoTarget" to Messages.chestEditNoTarget(),
             "chestEditNotAChest" to Messages.chestEditNotAChest(),
             "chestEditUsage" to Messages.chestEditUsage(),
-            "noPermission" to Messages.noPermission("uidesigner.save"),
         )
 
     private fun plain(message: Component): String =
