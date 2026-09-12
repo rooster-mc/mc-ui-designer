@@ -1,6 +1,6 @@
 ---
 name: Consume rooster-commands root executor and suggestion dedupe
-status: todo
+status: in-progress
 parent: Polish
 depends-on: ["100"]
 reviewers: [tester, correctness, architecture, readability, ux]
