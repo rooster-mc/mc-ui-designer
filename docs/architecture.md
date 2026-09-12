@@ -2,7 +2,8 @@
 
 One Gradle module in this repository (`UiDesigner`); the region and
 WorldEdit-selection types come from the `rooster-region` composite build
-(`:core`, `:worldedit`). Packages under `dev.cypdashuhn.uidesigner`:
+(`:core`, `:worldedit`), and the command DSL comes from the `rooster-commands`
+composite build (`:`, `:command-api`). Packages under `dev.cypdashuhn.uidesigner`:
 
 ```
 uidesigner/
@@ -12,9 +13,7 @@ uidesigner/
     ReloadResult.kt          reloadConfiguration outcome (reloaded/defaults/invalid)
   capture/
     ChestContent.kt          capture-side intermediate: chest position + inventory
-    SelectionSource.kt       interface: player -> dev.rooster.region.Region (seam for tests)
-    FaweSelectionSource.kt   rooster-region WorldEdit adapter
-    ChestCapture.kt          selection source + player -> CapturedSelection? (region + contents)
+    ChestCapture.kt          selection lookup + player -> CapturedSelection? (region + contents)
     ChestScanner.kt          region -> list<ChestContent>, filters chest blocks
     DoubleChestGrouper.kt    merges double-chest halves into one design
   naming/
@@ -24,37 +23,33 @@ uidesigner/
     JsonExporter.kt          UiChest -> JSON string/file (atomic write; single ordering authority)
   commands/
     UiDesignerCommand.kt     /uidesigner save | reload | help
-    ChestEditCommand.kt      /chest-edit <name> | clear (uidesigner.chest-edit)
+    ChestEditCommand.kt      /chest-edit <name> | clear
   util/
     Messages.kt              Adventure components / prefixes
 ```
 
 ## Seams
 
-- **`SelectionSource`** isolates FAWE. `ChestScanner` takes a
+- **FAWE is isolated by laziness, not by an interface.** `ChestScanner` takes a
   `dev.rooster.region.Region` (which carries its `World`), never touching
-  WorldEdit directly, so `SelectionSource` and `ChestScanner` are testable with
-  fakes. `ChestCapture.capture(source, player)` is the production entry point
-  that glues the two: `null` means the player has no usable selection; otherwise
-  it returns a `CapturedSelection` carrying the `Region` and its
-  `List<ChestContent>` (empty when the selection contained no chests). The
-  region type and the WorldEdit selection conversion live in the sibling
-  `rooster-region` library, wired in as a Gradle composite build
-  (`settings.gradle.kts` maps `dev.rooster.region:rooster-region` to `:core` and
-  `dev.rooster.region:rooster-region-worldedit` to `:worldedit`). The plugin
-  wires a lazy delegating `SelectionSource` rather than `FaweSelectionSource`
-  directly: FAWE is `compileOnly` and absent from MockBukkit's classpath, and
-  the delegation keeps `FaweSelectionSource` from class-loading during
-  `onEnable`. FAWE is also a hard `depend` in `plugin.yml`, so a real server
-  refuses to enable without it.
-- **`Region` is cuboid-only.** `FaweSelectionSource` wraps the library adapter
-  and reduces any FAWE selection (including non-cuboid `//hcyl`/`//poly`) to its
-  min/max bounding box, so a chest inside the box but outside the actual
-  selection is captured. World scoping lives in the library's
-  `worldEditSelection()`, which returns null when the session's selection world
-  is not the player's current world (the selection world survives a world
-  change); `FaweSelectionSource` only converts the returned selection to a
-  `Region`. Shape fidelity is out of scope for the MVP. The library's
+  WorldEdit directly, so it is testable with fakes. `ChestCapture.capture(selectionOf, player)`
+  is the production entry point that glues the two: `null` means the player has
+  no usable selection; otherwise it returns a `CapturedSelection` carrying the
+  `Region` and its `List<ChestContent>` (empty when the selection contained no
+  chests). The selection lookup is a plain `(Player) -> Region?` lambda wired in
+  `UiDesignerPlugin.onEnable`: FAWE is `compileOnly` and absent from MockBukkit's
+  classpath, and the lambda body only touches the rooster-region worldedit
+  extension types when invoked, so nothing FAWE-adjacent class-loads during
+  `onEnable` or command registration. FAWE is also a hard `depend` in
+  `plugin.yml`, so a real server refuses to enable without it.
+- **`Region` is cuboid-only.** The library adapter reduces any FAWE selection
+  (including non-cuboid `//hcyl`/`//poly`) to its min/max bounding box, so a
+  chest inside the box but outside the actual selection is captured. World
+  scoping lives in the library's `worldEditSelection()`, which returns null when
+  the session's selection world is not the player's current world (the selection
+  world survives a world change); the plugin's lambda only converts the returned
+  selection to a `Region` via `toRegion(player.world)`. Shape fidelity is out of
+  scope for the MVP. The library's
   `Region.blockAt(BlockPos)` backs the grouper's and the command's `BlockPos`-keyed
   lookups; the scanner's int-triple loop calls `World.getBlockAt` directly.
 - **`export`** is pure Kotlin: no Bukkit imports, and `BlockPos` comes from the
@@ -120,23 +115,25 @@ uidesigner/
   consumer appears, then extract one shared `isChest`.
 - **`UiDesignerCommand`** is the integration point for `/uidesigner save |
   reload | help`. It composes `ChestCapture`, `DoubleChestGrouper`,
-  `ChestNamer`, and `JsonExporter` without owning their logic, and injects
-  `SelectionSource`, a `() -> UiDesignerConfig` provider, a reload action, and
-  an exporter function so the pipeline is unit-testable without CommandAPI
-  dispatch. `save` runs on the CommandAPI player executor (main thread); file
-  IO stays synchronous for the MVP. `save` requires `uidesigner.save`, `reload`
-  requires `uidesigner.reload`, and `/chest-edit` requires
-  `uidesigner.chest-edit`, all defaulting to op; `help` and the bare root need
-  no permission. The nodes are declared in `build.gradle.kts`
-  and checked inside each executor, so a missing permission sends
-  `Messages.noPermission(node)` rather than failing at parse time; `Messages`
-  owns every player-facing component (prefix, colour, wording). `reload`, `help`,
-  and the root accept any sender (console included); only `save` is
-  player-only. CommandAPI suggests the registered subcommand literals
-  automatically, and `/chest-edit` adds a `clear` suggestion for its optional
-  name argument. `reloadConfiguration()` returns a `ReloadResult`, which
-  `UiDesignerCommand` maps to its `ReloadOutcome` (reloaded, defaults, invalid
-  output, or failed).
+  `ChestNamer`, and `JsonExporter` without owning their logic, and injects a
+  `(Player) -> Region?` selection provider, a `() -> UiDesignerConfig`
+  provider, a reload action, and an exporter function so the pipeline is
+  unit-testable without CommandAPI dispatch. `save` runs on the main thread;
+  file IO stays synchronous for the MVP. This is a local tool, so there are no
+  permission checks: `save` is player-only (a non-player sender is silently
+  ignored), while `reload`, `help`, and the bare root accept any sender
+  (console included). Both commands are built with the `rooster-commands` DSL
+  (`literal`/`greedyString` nodes compiled to CommandAPI `CommandTree`s by the
+  library's `command-api` backend); `Messages`
+  owns every player-facing component (prefix, colour, wording). CommandAPI
+  suggests the registered subcommand literals automatically, and `/chest-edit`
+  gets its `clear` suggestion from a real `clear` literal node beside the
+  optional greedy name argument (a `CommandTree` branches at the root, so the
+  literal does not need to be a reserved sentinel name; any-casing, blank, and
+  whitespace-padded "clear" still route through the greedy branch and
+  `apply`'s trim/case-insensitive handling). `reloadConfiguration()` returns a
+  `ReloadResult`, which `UiDesignerCommand` maps to its `ReloadOutcome`
+  (reloaded, defaults, invalid output, or failed).
 - **`JsonExporter`** is the single ordering authority: it sorts chests by
   canonical position and rows/slots by index. The grouper (040) merges double
   chests and must not re-sort; the exporter normalises order.
@@ -145,7 +142,7 @@ uidesigner/
 
 ```
 player + FAWE selection
-        │  SelectionSource.selectionOf
+        │  selection lookup lambda (UiDesignerPlugin)
         ▼
    Region? (min/max corners + world; null = no selection)
         │  ChestCapture.capture -> ChestScanner.scan
