@@ -13,8 +13,8 @@ import org.bukkit.block.DoubleChest
 import org.bukkit.inventory.ItemStack
 import org.bukkit.block.data.type.Chest as ChestData
 
-//TODO: Is there no easier way? Especially detection what is a double chest, and what block is the
-//neighbour if it, feels weirdly excessive. is there no state you can quickly check?
+// TODO: Is there no easier way? Especially detection what is a double chest, and what block is the
+// neighbour if it, feels weirdly excessive. is there no state you can quickly check?
 object DoubleChestGrouper {
     private const val SLOTS_PER_ROW = 9
 
