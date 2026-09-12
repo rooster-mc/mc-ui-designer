@@ -9,12 +9,11 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
 
-// TODO: Is this file optionally windows compatible? if not turn it into a windows compatible one.
 object JsonExporter {
     private val WORLD_READABLE: Set<PosixFilePermission> =
         PosixFilePermissions.fromString("rw-r--r--")
 
-    fun toJson(chests: List<UiChest>): String = DesignJson.encodeToString(normalized(chests))
+    fun toJson(chests: List<UiChest>): String = DesignJson.encodeToString(orderedChests(chests))
 
     fun export(chests: List<UiChest>, target: Path) {
         val absolute = target.toAbsolutePath()
@@ -30,8 +29,7 @@ object JsonExporter {
         }
     }
 
-    // TODO: Normalized by what? name undescriptive
-    private fun normalized(chests: List<UiChest>): List<UiChest> =
+    private fun orderedChests(chests: List<UiChest>): List<UiChest> =
         chests
             .map { it to it.requiredPosition() }
             .sortedBy { (_, position) -> position }
@@ -59,10 +57,17 @@ object JsonExporter {
 
     private fun createTemp(directory: Path): Path {
         val temp = Files.createTempFile(directory, "uidesigner-export-", ".tmp")
-        if (directory.fileSystem.supportedFileAttributeViews().contains("posix")) {
-            Files.setPosixFilePermissions(temp, WORLD_READABLE)
-        }
+        applyWorldReadablePermissions(temp)
         return temp
+    }
+
+    private fun applyWorldReadablePermissions(temp: Path) {
+        if (!temp.fileSystem.supportedFileAttributeViews().contains("posix")) return
+        try {
+            Files.setPosixFilePermissions(temp, WORLD_READABLE)
+        } catch (_: UnsupportedOperationException) {
+            // Some filesystems report POSIX support but reject attribute writes; defaults are fine.
+        }
     }
 
     private fun move(temp: Path, target: Path) {

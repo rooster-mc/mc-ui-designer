@@ -13,8 +13,11 @@ import org.bukkit.block.DoubleChest
 import org.bukkit.inventory.ItemStack
 import org.bukkit.block.data.type.Chest as ChestData
 
-// TODO: Is there no easier way? Especially detection what is a double chest, and what block is the
-// neighbour if it, feels weirdly excessive. is there no state you can quickly check?
+// The DoubleChest inventory holder gives both halves directly, but is unavailable in
+// some states (e.g. MockBukkit), so the block-state fallback is needed. A Chest block
+// state exposes only type (LEFT/RIGHT) and facing — no direct partner reference — and
+// that pair fully determines the neighbour: the partner is always the adjacent block
+// on the chest's outer side, i.e. the facing vector rotated ±90°.
 object DoubleChestGrouper {
     private const val SLOTS_PER_ROW = 9
 
@@ -108,26 +111,15 @@ object DoubleChestGrouper {
             .filter { it in byPosition && it !in consumed }
             .takeIf { it.size == 2 }
 
-    private fun partnerOffset(type: ChestData.Type, facing: BlockFace): Pair<Int, Int>? =
-        when (type) {
-            ChestData.Type.LEFT ->
-                when (facing) {
-                    BlockFace.NORTH -> 1 to 0
-                    BlockFace.SOUTH -> -1 to 0
-                    BlockFace.EAST -> 0 to 1
-                    BlockFace.WEST -> 0 to -1
-                    else -> null
-                }
-            ChestData.Type.RIGHT ->
-                when (facing) {
-                    BlockFace.NORTH -> -1 to 0
-                    BlockFace.SOUTH -> 1 to 0
-                    BlockFace.EAST -> 0 to -1
-                    BlockFace.WEST -> 0 to 1
-                    else -> null
-                }
-            ChestData.Type.SINGLE -> null
+    private fun partnerOffset(type: ChestData.Type, facing: BlockFace): Pair<Int, Int>? {
+        if (type == ChestData.Type.SINGLE) return null
+        val facingOffset = facing.modX to facing.modZ
+        return if (type == ChestData.Type.LEFT) {
+            -facingOffset.second to facingOffset.first
+        } else {
+            facingOffset.second to -facingOffset.first
         }
+    }
 
     private fun rowCount(items: List<ItemStack?>): Int {
         require(items.isNotEmpty() && items.size % SLOTS_PER_ROW == 0) {

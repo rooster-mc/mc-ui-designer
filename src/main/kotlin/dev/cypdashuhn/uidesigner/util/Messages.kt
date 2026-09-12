@@ -3,104 +3,18 @@ package dev.cypdashuhn.uidesigner.util
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextColor
-import java.nio.file.Path
 
-// TODO: Not a fan. i think messages should go where they are used. You can keep generalized
-// variables here, but the per feature content is stupid here.
 object Messages {
     const val PREFIX = "[UiDesigner] "
 
-    private val prefixColor: TextColor = NamedTextColor.AQUA
-    private val successColor: TextColor = NamedTextColor.GREEN
-    private val errorColor: TextColor = NamedTextColor.RED
-    private val infoColor: TextColor = NamedTextColor.YELLOW
+    val prefixColor: TextColor = NamedTextColor.AQUA
+    val successColor: TextColor = NamedTextColor.GREEN
+    val errorColor: TextColor = NamedTextColor.RED
+    val infoColor: TextColor = NamedTextColor.YELLOW
 
-    private const val HELP_TEXT =
-        "UiDesigner commands:\n" +
-            "/uidesigner save - export the selected chest designs to JSON.\n" +
-            "/uidesigner reload - reload config.yml.\n" +
-            "/chest-edit <name> - name or clear the chest you are looking at.\n" +
-            "/uidesigner help - show this help."
+    fun styled(color: TextColor, body: String): Component = styled(color, Component.text(body))
 
-    private const val WRITE_FAILURE_HINT = "check that the output folder exists and is writable"
-    private const val RELOAD_FAILURE_HINT = "check config.yml and the server log"
-    private const val INVALID_OUTPUT_HINT = "check the output-file setting"
-
-    fun help(): Component = styled(infoColor, HELP_TEXT)
-
-    fun saveSuccess(chests: Int, outputFile: Path): Component {
-        val noun = if (chests == 1) "chest design" else "chest designs"
-        return styled(
-            successColor,
-            "Exported $chests $noun to $outputFile (a double chest counts once).",
-        )
-    }
-
-    fun noSelection(): Component =
-        styled(errorColor, "No WorldEdit selection. Select a region first.")
-
-    fun noChests(): Component =
-        styled(
-            errorColor,
-            "The selection contains no chests. Place chests inside the selected region " +
-                "(loaded chunks only).",
-        )
-
-    fun writeFailed(outputFile: Path?, reason: String?): Component {
-        val target = outputFile?.let { " to $it" } ?: ""
-        val detail = withTrailingPeriod(reasonOrDefault(reason, WRITE_FAILURE_HINT))
-        return styled(errorColor, "Could not write the export$target: $detail")
-    }
-
-    fun invalidOutputFile(reason: String?): Component {
-        val detail = withTrailingPeriod(reasonOrDefault(reason, INVALID_OUTPUT_HINT))
-        return styled(errorColor, "The configured output path is not usable: $detail")
-    }
-
-    fun reloadSuccess(outputFile: Path): Component =
-        styled(successColor, "Reloaded config.yml. Output file: $outputFile.")
-
-    fun reloadUsingDefaults(outputFile: Path): Component =
-        styled(
-            infoColor,
-            "config.yml could not be read; using defaults. Output file: $outputFile.",
-        )
-
-    fun reloadInvalidOutput(outputFile: Path): Component =
-        styled(
-            infoColor,
-            "output-file in config.yml is not a valid path; using defaults. " +
-                "Output file: $outputFile.",
-        )
-
-    fun reloadFailed(reason: String?): Component {
-        val detail = withTrailingPeriod(reasonOrDefault(reason, RELOAD_FAILURE_HINT))
-        return styled(errorColor, "Could not reload config.yml: $detail")
-    }
-
-    fun chestEditNamed(name: String): Component =
-        styled(successColor, "Named this chest \"$name\".")
-
-    fun chestEditCleared(): Component = styled(successColor, "Cleared this chest's name.")
-
-    fun chestEditNothingToClear(): Component = styled(infoColor, "This chest has no name.")
-
-    fun chestEditNoTarget(): Component =
-        styled(errorColor, "Not looking at a chest (or it is out of reach).")
-
-    fun chestEditNotAChest(): Component = styled(errorColor, "That block is not a chest.")
-
-    fun chestEditUsage(): Component =
-        styled(
-            infoColor,
-            "Usage: /chest-edit <name> - name the chest you are looking at, " +
-                "or /chest-edit clear to remove the name.",
-        )
-
-    private fun styled(color: TextColor, body: String): Component =
-        styled(color, Component.text(body))
-
-    private fun styled(color: TextColor, body: Component): Component =
+    fun styled(color: TextColor, body: Component): Component =
         Component
             .text()
             .color(color)
@@ -108,8 +22,8 @@ object Messages {
             .append(body)
             .build()
 
-    private fun reasonOrDefault(reason: String?, fallback: String): String =
+    fun reasonOrDefault(reason: String?, fallback: String): String =
         reason?.takeIf { it.isNotBlank() } ?: fallback
 
-    private fun withTrailingPeriod(text: String): String = text.trim().trimEnd('.') + "."
+    fun withTrailingPeriod(text: String): String = text.trim().trimEnd('.') + "."
 }

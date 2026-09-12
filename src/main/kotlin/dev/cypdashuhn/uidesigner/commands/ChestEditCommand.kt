@@ -9,6 +9,7 @@ import dev.rooster.commands.onExecute
 import dev.rooster.commands.playerOrNull
 import dev.rooster.commands.types.greedyString
 import dev.rooster.commands.types.literal
+import net.kyori.adventure.text.Component
 import org.bukkit.block.Block
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
@@ -38,7 +39,7 @@ class ChestEditCommand(
         val usageExecutor =
             CommandExecutor { sender, _ ->
                 val player = sender as? Player ?: return@CommandExecutor
-                player.sendMessage(Messages.chestEditUsage())
+                player.sendMessage(usageMessage())
             }
         command("chest-edit") {
             greedyString("name").onExecute {
@@ -46,9 +47,6 @@ class ChestEditCommand(
                 val rawName = argOrNull<String>("name") ?: return@onExecute
                 player.sendMessage(outcomeMessage(apply(targetResolver(player), rawName)))
             }
-            // A CommandTree branches at the root, so "clear" can be a real literal node
-            // beside the greedy name instead of a reserved sentinel name; the greedy
-            // branch still handles any-casing, blank, and padded input via apply().
             literal("clear").onExecute {
                 val player = playerOrNull ?: return@onExecute
                 player.sendMessage(outcomeMessage(apply(targetResolver(player), "clear")))
@@ -59,15 +57,13 @@ class ChestEditCommand(
 
     private fun outcomeMessage(outcome: Outcome) =
         when (outcome) {
-            is Outcome.Named -> Messages.chestEditNamed(outcome.name)
-            Outcome.Cleared -> Messages.chestEditCleared()
-            Outcome.NothingToClear -> Messages.chestEditNothingToClear()
-            Outcome.NoTarget -> Messages.chestEditNoTarget()
-            Outcome.NotAChest -> Messages.chestEditNotAChest()
+            is Outcome.Named -> namedMessage(outcome.name)
+            Outcome.Cleared -> clearedMessage()
+            Outcome.NothingToClear -> nothingToClearMessage()
+            Outcome.NoTarget -> noTargetMessage()
+            Outcome.NotAChest -> notAChestMessage()
         }
 
-    // Input is trimmed first, so whitespace-padded "clear" cannot smuggle in a name,
-    // and blank input is treated as clear so it never stores an empty custom name.
     fun apply(target: Block?, rawName: String): Outcome {
         if (target == null) return Outcome.NoTarget
         if (!ChestNamer.isChest(target)) return Outcome.NotAChest
@@ -81,3 +77,25 @@ class ChestEditCommand(
         return Outcome.Named(name)
     }
 }
+
+internal fun usageMessage(): Component =
+    Messages.styled(
+        Messages.infoColor,
+        "Usage: /chest-edit <name> - name the chest you are looking at, " +
+            "or /chest-edit clear to remove the name.",
+    )
+
+internal fun namedMessage(name: String): Component =
+    Messages.styled(Messages.successColor, "Named this chest \"$name\".")
+
+internal fun clearedMessage(): Component =
+    Messages.styled(Messages.successColor, "Cleared this chest's name.")
+
+internal fun nothingToClearMessage(): Component =
+    Messages.styled(Messages.infoColor, "This chest has no name.")
+
+internal fun noTargetMessage(): Component =
+    Messages.styled(Messages.errorColor, "Not looking at a chest (or it is out of reach).")
+
+internal fun notAChestMessage(): Component =
+    Messages.styled(Messages.errorColor, "That block is not a chest.")
