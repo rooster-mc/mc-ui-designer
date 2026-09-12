@@ -71,3 +71,47 @@ No findings.
   (exact-cardinality suggestion test; root executor fires only for the bare
   command; console no-op preserved) match the library paths and the diff I
   read; no dissent.
+
+## Round 2
+### Verdict
+Ship. The post-fix tree has no source change since round 1, and the readability
+prose reflow has removed the only defect I could see in `docs/architecture.md`.
+The doc is now both accurate and well-formed; `docs/design.md` is still
+consistent with the code; the command-layer seam and the absence of
+`CommandExecutor` are unchanged. No new findings.
+
+### Findings
+No findings.
+
+### Non-findings
+- **`docs/architecture.md` is accurate and well-formed after the reflow.** The
+  stranded single-word line is gone: `docs/architecture.md:142` now reads
+  `CommandAPI suggests the registered subcommand literals automatically; the`,
+  and the paragraph flows normally to line 149. The reflow also closes the
+  pre-existing `so the` / `literal` split flagged as optional in readability's
+  finding (now `so the literal does not` / `need to be...`, lines 145-146).
+  Factually the paragraph still matches the library: the root `onExecute` claim
+  (`Compiler.kt:51-58`), the "no direct `CommandTree.executes` remains" claim,
+  and the greedy-suggestion/exclusion claim (`Compiler.kt:163-171,207`) all hold.
+- **`docs/design.md` remains accurate and needed no edit in round 2.** It never
+  described `.executes(...)` or the tab-completion suggestion, so this ticket did
+  not invalidate it. Its `clear` statements (lines 99-104) are about the reserved
+  name, casing/trim and bare-command usage, all still true. The "both
+  `/chest-edit` executors are player-only" phrasing predates this ticket and its
+  accompanying clause ("uniformly across bare and argument-bearing invocations")
+  already covers the root handler, so it is not stale as a result of this change.
+  `docs/data-format.md` is untouched by command wiring.
+- **The command-layer seam is intact.** Source is byte-identical to the state I
+  reviewed in round 1 (`git diff 08b747e -- src/` is empty), so `register()`
+  remains a wiring-only block over the DSL while `apply`/`save`/`reload` stay
+  tested pure logic, and the root callbacks still resolve `sender`/`playerOrNull`
+  through the library `Context` rather than CommandAPI types.
+- **`CommandExecutor` is still fully gone.** `rg 'dev\.jorel|CommandExecutor'
+  src/main/kotlin/dev/cypdashuhn/uidesigner/commands/` returns nothing, and
+  `rg '\.executes\(|CommandExecutor' src/` is empty; the only `executes` strings
+  in the maintained docs are the accurate "no direct `CommandTree.executes`
+  remains" sentence.
+- **Concur with the round-1 and round-2 reports; no dissent.** Readability's
+  wrap finding is resolved in the current `docs/architecture.md`; correctness and
+  tester round-2 reports correctly conclude nothing changed in source; ux's
+  player-facing conclusion is unaffected. I add nothing to any of them.
