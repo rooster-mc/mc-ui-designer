@@ -59,20 +59,23 @@ uidesigner/
   selection to a `Region` via `toRegion(player.world)`. Shape fidelity is out of
   scope for the MVP. The library's
   `Region.blockAt(BlockPos)` backs the grouper's and the command's `BlockPos`-keyed
-  lookups; the scanner's int-triple loop calls `World.getBlockAt` directly.
+  lookups and the scanner's per-position block read.
 - **`export`** is pure Kotlin: no Bukkit imports, and `BlockPos` comes from the
   library. It is the easiest place to get coverage and the place where format
   correctness lives.
 - **`ChestContent` lives in `capture/`, not `export/`** (decided in 030): it holds
   Bukkit `ItemStack`s, so putting it in the pure `export` package would break
   that package's purity.
-- **`ChestScanner`** is the only place that *enumerates* blocks and reads
-  inventories, turning Bukkit `Block`/`Inventory` into the capture-side model
+- **`ChestScanner`** is the only place that *scans* blocks (consuming the
+  library's `Region.loadedBlockPositions`) and reads inventories, turning Bukkit
+  `Block`/`Inventory` into the capture-side model
   (`ChestContent`); grouping may do targeted block lookups through the injected
   `Region` (Bukkit-coupled by design, testable with MockBukkit), and only
-  `export` is fully Bukkit-free. It returns one entry per chest block,
-  ordered by `x`, then `y`, then `z`, and skips blocks in unloaded chunks rather
-  than forcing a chunk load. Each entry reads the block's own 27-slot inventory
+  `export` is fully Bukkit-free. It iterates `Region.loadedBlockPositions`
+  (chunk-major, skipping unloaded chunks rather than forcing a chunk load) and
+  resolves each position through `region.blockAt`, returning one entry per chest
+  block in the library's enumeration order; `JsonExporter` normalises order. Each
+  entry reads the block's own 27-slot inventory
   (`Chest.getBlockInventory`), not the shared double-chest inventory, so a
   double chest's halves stay independent until the grouper merges them.
   MockBukkit cannot form a real double chest and `ChestStateMock.getBlockInventory()`

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockbukkit.mockbukkit.MockBukkit
@@ -56,22 +55,37 @@ class ChestScannerTest {
     }
 
     @Test
-    fun `several single chests are captured in position order`() {
+    fun `several single chests are captured`() {
         blockAt(Material.CHEST, 2, 0, 0)
         blockAt(Material.TRAPPED_CHEST, 0, 0, 2)
         blockAt(Material.CHEST, 0, 2, 0)
         blockAt(Material.CHEST, 0, 0, 0)
 
         val captured = captureSelection(region(0, 0, 0, 2, 2, 2))
-
-        assertEquals(
-            listOf(
+        val positions = captured.contents.map { it.position }
+        val expected =
+            setOf(
                 BlockPos(0, 0, 0),
                 BlockPos(0, 0, 2),
                 BlockPos(0, 2, 0),
                 BlockPos(2, 0, 0),
-            ),
-            captured.contents.map { it.position },
+            )
+
+        assertEquals(expected, positions.toSet())
+        assertEquals(expected.size, positions.size)
+    }
+
+    @Test
+    fun `chests in separate loaded chunks are all captured`() {
+        world.getChunkAt(1, 0)
+        blockAt(Material.CHEST, 0, 0, 0)
+        blockAt(Material.CHEST, 16, 0, 0)
+
+        val captured = captureSelection(region(0, 0, 0, 16, 0, 0))
+
+        assertEquals(
+            setOf(BlockPos(0, 0, 0), BlockPos(16, 0, 0)),
+            captured.contents.map { it.position }.toSet(),
         )
     }
 
@@ -140,11 +154,13 @@ class ChestScannerTest {
 
     @Test
     fun `chests in unloaded chunks are skipped without error`() {
+        blockAt(Material.CHEST, 0, 0, 0)
         blockAt(Material.CHEST, 16, 0, 0)
 
         assertFalse(world.isChunkLoaded(1, 0))
-        assertTrue(
-            captureSelection(region(16, 0, 0, 16, 0, 0)).contents.isEmpty(),
+        assertEquals(
+            listOf(BlockPos(0, 0, 0)),
+            captureSelection(region(0, 0, 0, 16, 0, 0)).contents.map { it.position },
         )
     }
 
