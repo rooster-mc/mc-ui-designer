@@ -3,7 +3,15 @@
 One Gradle module in this repository (`UiDesigner`); the region and
 WorldEdit-selection types come from the `rooster-region` composite build
 (`:core`, `:worldedit`), and the command DSL comes from the `rooster-commands`
-composite build (`:`, `:command-api`). Packages under `dev.cypdashuhn.uidesigner`:
+composite build (`:`, `:command-api`). `settings.gradle.kts` maps
+`dev.rooster.region:rooster-region` to `:core`,
+`dev.rooster.region:rooster-region-worldedit` to `:worldedit`,
+`dev.rooster:rooster-commands` to the `rooster-commands` root project and
+`dev.rooster:command-api` to its `:command-api` module; all three siblings
+(`rooster-region`, `rooster-commands`, and the transitively required
+`rooster-core`) must be checked out beside this repository, which
+`settings.gradle.kts` guards with `check(...)`. Packages under
+`dev.cypdashuhn.uidesigner`:
 
 ```
 uidesigner/

@@ -42,10 +42,15 @@ Out of scope (backlog):
   `../rooster-region` checked out beside this repository. The library targets
   Paper 1.21.4 / Java 21, but the `Region`/`Location`/`World` surface it exposes
   is stable on 26.2, so the version delta is accepted. Its `api` joml is
-  excluded from the shaded jar because Paper supplies joml at runtime. The rest
-  of the `rooster-*` stack is still not required: `rooster-core` (config
-  helpers) and `rooster-commands` (CommandAPI wrapper) remain candidates to
-  revisit before writing more commands.
+  excluded from the shaded jar because Paper supplies joml at runtime. The
+  command layer uses the sibling `rooster-commands` library, also consumed as a
+  Gradle composite build; this requires `../rooster-commands` checked out beside
+  this repository, which in turn builds against `../rooster-core` (a transitive
+  checkout requirement, guarded by a `check(...)` in `settings.gradle.kts`).
+  `rooster-commands`' `command-api` backend compiles the DSL trees to CommandAPI
+  `CommandTree`s (CommandAPI `commandapi-paper-shade` `11.2.0`, shaded beneath).
+  `rooster-core` itself is only pulled in transitively; this plugin does not use
+  its service hooks.
 - **Excluded:** `rooster-ui` (we render nothing), `rooster-sql` (no database),
   `rooster-localization` (plain Adventure components are enough).
 - **Target:** Paper `26.2`, Java `25`, Kotlin `2.4.10`, matching the newest
@@ -53,14 +58,20 @@ Out of scope (backlog):
   `shadow` `8.3.6`, `plugin-yml` `0.6.0`, plus `kotlin("plugin.serialization")`
   and `org.jlleitschuh.gradle.ktlint`.
 - **Serialization:** `kotlinx-serialization-json`, no Gson.
-- **Commands:** `dev.jorel:commandapi-paper-shade:11.2.0`, shaded.
+- **Commands:** the command DSL comes from the sibling `rooster-commands`
+  library (`literal`/`greedyString` trees compiled by its `command-api` backend
+  into CommandAPI `CommandTree`s); `dev.jorel:commandapi-paper-shade:11.2.0`
+  is shaded beneath it.
 - **FAWE:** `com.fastasyncworldedit:FastAsyncWorldEdit-Core` +
   `-Bukkit` (`compileOnly`, pinned to `2.15.3`, with the IntellectualSites BOM
   for transitive deps) and the matching `FastAsyncWorldEdit-Paper-2.15.3.jar`
   auto-downloaded from GitHub releases by `run-paper` (Hangar's FAWE entries
   have no download URLs). FAWE is a hard `depend` in `plugin.yml`, so a server
-  refuses to enable UiDesigner without it; the lazy delegating `SelectionSource`
-  only exists to keep `FaweSelectionSource` from class-loading under MockBukkit.
+  refuses to enable UiDesigner without it; the selection lookup is a plain
+  `(Player) -> Region?` lambda whose body only touches the rooster-region
+  worldedit extension types when invoked (`UiDesignerPlugin.worldEditSelectionOf`),
+  so nothing FAWE-adjacent class-loads under MockBukkit (see
+  `docs/architecture.md`, Seams).
 - **Cuboid selections only.** A `Region` is a min/max bounding box, so a
   non-cuboid FAWE selection (`//hcyl`, `//poly`) captures every chest inside its
   bounding box, not only those inside the shape. Shape fidelity is backlog.
@@ -71,12 +82,12 @@ Out of scope (backlog):
   into the packaged `config.yml`.
 - **Command root:** `/uidesigner` (alias `/uid`); the chest naming command is
   the separate top-level `/chest-edit`.
-- **Permissions:** `uidesigner.save`, `uidesigner.reload`, and
-  `uidesigner.chest-edit` default to op and are declared in `build.gradle.kts`
-  (the command classes hold the node strings as constants). Each privileged
-  executor checks its node before acting and replies with a prefixed denial
-  message, so a missing permission is a clear chat line rather than a Brigadier
-  parse failure. `help` and the bare `/uidesigner` root are permission-free.
+- **No permissions.** This is a local tool, so the permission concept was
+  dropped entirely: no permission nodes are declared or checked. `save` and
+  both `/chest-edit` executors are player-only; a non-player sender (console)
+  is silently ignored rather than answered, uniformly across bare and
+  argument-bearing invocations. `reload`, `help`, and the bare `/uidesigner`
+  root accept any sender.
 - **Casing:** the JSON keys are normalised to `camelCase` and made valid JSON.
   See `docs/data-format.md` for the corrected schema and the delta from the
   original draft.
