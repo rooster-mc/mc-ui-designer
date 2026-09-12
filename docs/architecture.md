@@ -135,13 +135,17 @@ uidesigner/
   library's `command-api` backend); `Messages` owns the shared styling
   primitives (prefix, colour palette, `styled`), while each command file owns
   its own message bodies as internal top-level functions, kept testable from
-  the same module. CommandAPI
-  suggests the registered subcommand literals automatically, and `/chest-edit`
-  gets its `clear` suggestion from a real `clear` literal node beside the
-  optional greedy name argument (a `CommandTree` branches at the root, so the
-  literal does not need to be a reserved sentinel name; any-casing, blank, and
-  whitespace-padded "clear" still route through the greedy branch and
-  `apply`'s trim/case-insensitive handling). `reloadConfiguration()` returns a
+  the same module. The bare-command behaviour of both roots is a root
+  `onExecute { ... }` on the `command(...)` scope, so no direct
+  `CommandTree.executes` remains: `/uidesigner` prints help for any sender,
+  `/chest-edit` prints usage for a player and stays a silent no-op for console.
+  CommandAPI suggests the registered subcommand literals automatically; the
+  optional greedy `name` node also suggests `clear`, and the compiler dedupes
+  that value against the sibling `clear` literal (`excludingLiterals`) so it is
+  offered once (a `CommandTree` branches at the root, so the literal does not
+  need to be a reserved sentinel name; any-casing, blank, and whitespace-padded
+  "clear" still route through the greedy branch and `apply`'s
+  trim/case-insensitive handling). `reloadConfiguration()` returns a
   `ReloadResult`, which `UiDesignerCommand` maps to its `ReloadOutcome`
   (reloaded, defaults, invalid output, or failed).
 - **`JsonExporter`** is the single ordering authority: it sorts chests by

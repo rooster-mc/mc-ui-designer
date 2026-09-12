@@ -2,11 +2,11 @@ package dev.cypdashuhn.uidesigner.commands
 
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
 import dev.cypdashuhn.uidesigner.util.Messages
-import dev.jorel.commandapi.executors.CommandExecutor
 import dev.rooster.commands.argOrNull
 import dev.rooster.commands.commandapi.command
 import dev.rooster.commands.onExecute
 import dev.rooster.commands.playerOrNull
+import dev.rooster.commands.suggestStrings
 import dev.rooster.commands.types.greedyString
 import dev.rooster.commands.types.literal
 import net.kyori.adventure.text.Component
@@ -36,23 +36,23 @@ class ChestEditCommand(
     }
 
     fun register() {
-        val usageExecutor =
-            CommandExecutor { sender, _ ->
-                val player = sender as? Player ?: return@CommandExecutor
+        command("chest-edit") {
+            onExecute {
+                val player = playerOrNull ?: return@onExecute
                 player.sendMessage(usageMessage())
             }
-        command("chest-edit") {
-            greedyString("name").onExecute {
-                val player = playerOrNull ?: return@onExecute
-                val rawName = argOrNull<String>("name") ?: return@onExecute
-                player.sendMessage(outcomeMessage(apply(targetResolver(player), rawName)))
-            }
+            greedyString("name")
+                .suggestStrings { listOf("clear") }
+                .onExecute {
+                    val player = playerOrNull ?: return@onExecute
+                    val rawName = argOrNull<String>("name") ?: return@onExecute
+                    player.sendMessage(outcomeMessage(apply(targetResolver(player), rawName)))
+                }
             literal("clear").onExecute {
                 val player = playerOrNull ?: return@onExecute
                 player.sendMessage(outcomeMessage(apply(targetResolver(player), "clear")))
             }
-        }.executes(usageExecutor)
-            .register(plugin)
+        }.register(plugin)
     }
 
     private fun outcomeMessage(outcome: Outcome) =

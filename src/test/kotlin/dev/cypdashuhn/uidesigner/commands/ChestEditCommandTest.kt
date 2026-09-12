@@ -189,6 +189,14 @@ class ChestEditCommandTest {
         CommandAPITestUtilities.assertCommandSuggests(opPlayer(), "chest-edit ", "clear")
     }
 
+    @Test
+    fun `tab completion suggests clear for a partial name`() {
+        val plugin = MockCommandAPIPlugin.load()
+        ChestEditCommand(plugin) { null }.register()
+
+        CommandAPITestUtilities.assertCommandSuggests(opPlayer(), "chest-edit cl", "clear")
+    }
+
     private fun opPlayer(): PlayerMock = server.addPlayer().apply { isOp = true }
 
     private fun plainMessage(player: PlayerMock): String =

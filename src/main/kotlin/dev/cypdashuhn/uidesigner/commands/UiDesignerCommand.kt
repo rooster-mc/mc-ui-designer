@@ -8,7 +8,6 @@ import dev.cypdashuhn.uidesigner.export.JsonExporter
 import dev.cypdashuhn.uidesigner.export.UiChest
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
 import dev.cypdashuhn.uidesigner.util.Messages
-import dev.jorel.commandapi.executors.CommandExecutor
 import dev.rooster.commands.commandapi.command
 import dev.rooster.commands.onExecute
 import dev.rooster.commands.playerOrNull
@@ -66,17 +65,15 @@ class UiDesignerCommand(
     }
 
     fun register() {
-        val helpExecutor =
-            CommandExecutor { sender, _ -> sender.sendMessage(helpMessage()) }
         command("uidesigner") {
+            onExecute { sender.sendMessage(helpMessage()) }
             literal("save").onExecute {
                 val player = playerOrNull ?: return@onExecute
                 player.sendMessage(saveMessage(save(player)))
             }
             literal("reload").onExecute { sender.sendMessage(reloadMessage(reload())) }
             literal("help").onExecute { sender.sendMessage(helpMessage()) }
-        }.executes(helpExecutor)
-            .withAliases("uid")
+        }.withAliases("uid")
             .register(plugin)
     }
 
