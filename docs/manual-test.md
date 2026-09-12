@@ -17,6 +17,7 @@ Status: `unverified` | `passed` | `failed`.
 | MT-006 | 080 | Dev-server end-to-end after the rooster-region swap (not automatable: needs a live FAWE session and Paper): `just run`, place/fill/name chests, select the region with FAWE, run `/uidesigner save`, and confirm the server boots with the library-backed selection and the JSON matches `docs/data-format.md`. | unverified |
 | MT-007 | 100 | Dev-server check after the rooster-commands swap (not automatable: needs a live CommandAPI/Brigadier tree): confirm both commands behave as before — `/chest-edit <name>` names, bare `/chest-edit` sends usage (and is a silent no-op from console), `/chest-edit clear` clears in any casing, `/uidesigner` and `uid` alias respond, suggestions offer the subcommands and `clear`, and no permission checks exist. | unverified |
 | MT-008 | 110 | Export on a non-POSIX filesystem (not automatable on the Linux dev box): run `/uidesigner save` with the output file on a filesystem without POSIX support (e.g. FAT/exFAT mount or WSL `/mnt/c`), and confirm the export succeeds (temp file keeps default permissions) instead of throwing `UnsupportedOperationException`. | unverified |
+| MT-009 | 130 | Live-server suggestion dedupe (complements MT-007): `just run`, then type `/chest-edit ` and `/chest-edit cl` and confirm `clear` is suggested exactly once (the greedy `name` suggestion is deduped against the `clear` literal sibling), and that `/uidesigner`/`uid` subcommand suggestions still appear. | unverified |
 
 ## How to run
 
