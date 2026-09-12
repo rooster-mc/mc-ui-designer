@@ -15,6 +15,7 @@ Status: `unverified` | `passed` | `failed`.
 | MT-004 | 030 | Confirm a real FAWE selection (including a non-cuboid one) scans the expected chests and that large selections do not stall the server noticeably. | unverified |
 | MT-005 | 080 | Cross-world stale selection (not automatable: needs a live FAWE session): select a region in world A, teleport to world B without re-selecting, run `/uidesigner save`, and confirm it reports no selection instead of scanning B at A's coordinates. | unverified |
 | MT-006 | 080 | Dev-server end-to-end after the rooster-region swap (not automatable: needs a live FAWE session and Paper): `just run`, place/fill/name chests, select the region with FAWE, run `/uidesigner save`, and confirm the server boots with the library-backed selection and the JSON matches `docs/data-format.md`. | unverified |
+| MT-007 | 100 | Dev-server check after the rooster-commands swap (not automatable: needs a live CommandAPI/Brigadier tree): confirm both commands behave as before — `/chest-edit <name>` names, bare `/chest-edit` sends usage (and is a silent no-op from console), `/chest-edit clear` clears in any casing, `/uidesigner` and `uid` alias respond, suggestions offer the subcommands and `clear`, and no permission checks exist. | unverified |
 
 ## How to run
 

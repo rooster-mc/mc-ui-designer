@@ -1,6 +1,6 @@
 ---
 name: Adopt rooster-commands and drop command-layer accidents
-status: in-progress
+status: done
 parent: Polish
 depends-on: ["090"]
 reviewers: [correctness, architecture, readability]
@@ -50,7 +50,14 @@ Then remove every TODO this ticket resolves.
 
 ## Deferrals (record, don't fix)
 - "Clear" / command-tree TODOs that require `rooster-commands` API not yet
-  shipped there → note them in `../rooster-commands` issue tracker or a
-  backlog ticket here, not silently.
-- ChestScanner split to `rooster-region` → backlog ticket referencing
-  `rooster-region`.
+  shipped there → recorded in ticket 130 (backlog referencing
+  `../rooster-commands`), not silently.
+- ChestScanner split to `rooster-region` → ticket 120 (backlog referencing
+  `rooster-region`).
+
+## Outcome notes
+- Console convention after removing `executesPlayer`: player-only executors
+  silently no-op for non-player senders (pinned by test); `/uidesigner`
+  `reload`/`help`/root stay any-sender by design.
+- The greedy node's `clear` suggestion was dropped (duplicate of the literal
+  node's own suggestion); recorded in ticket 130.

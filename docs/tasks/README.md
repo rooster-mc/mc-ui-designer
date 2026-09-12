@@ -17,8 +17,10 @@ goes through the review pipeline in `docs/workflow.md`.
 | [070](070-ux-polish.md) | Command UX polish | Polish | 060 | done |
 | [080](080-adopt-rooster-region.md) | Adopt rooster-region for capture | MVP | 060 | done |
 | [090](090-consolidate-model.md) | Use rooster-region BlockPos and consolidate model | MVP | 080 | done |
-| [100](100-adopt-rooster-commands.md) | Adopt rooster-commands and drop command-layer accidents | Polish | 090 | todo |
+| [100](100-adopt-rooster-commands.md) | Adopt rooster-commands and drop command-layer accidents | Polish | 090 | done |
 | [110](110-todo-hygiene.md) | TODO-sweep hygiene and exporter robustness | Polish | 100 | todo |
+| [120](120-backlog-rooster-region-scanner.md) | Backlog: ChestScanner split into rooster-region | Polish | — | backlog |
+| [130](130-backlog-rooster-commands-api-gaps.md) | Backlog: rooster-commands API gaps noticed in adoption | Polish | — | backlog |
 
 ## Template
 
