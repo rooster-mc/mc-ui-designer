@@ -44,30 +44,35 @@ Run by `ticket-orchestrator`:
 
 1. Read the ticket and its `reviewers` list.
 2. `implementor` implements it on the ticket's branch/worktree.
-3. For each reviewer in order, spawn it with the ticket, the round number, and
-   the paths to every **earlier report in this round**. It writes its own report.
+3. Spawn every reviewer in the ticket's `reviewers` list **concurrently** with
+   the ticket and round number. They run in parallel and write only their own
+   report; they do not see same-round peers (their scopes are exclusive, so
+   overlap is not expected).
 4. Hand **all** reports (not just the last) to `implementor`. Every finding must
    be fixed, or explicitly deferred to a named ticket/gate with a reason.
 5. **Commit** the resulting state.
 6. Round 2: **resume** the same reviewer and implementor sessions via `task_id`
-   and repeat steps 3–5, so later fixes cannot invalidate earlier reviews and
-   nothing reloads context from scratch.
+   and repeat steps 3–5 — again with the reviewers in parallel — this time
+   seeding each reviewer with the **round-1 reports**, so later fixes cannot
+   invalidate earlier reviews and nothing fixed there is re-reported.
 7. Record any acceptance criterion that cannot be automated in
    `docs/manual-test.md` (see [Manual gate](#manual-gate)).
 8. Mark the ticket `done` and commit.
 
-Two rounds total per ticket. Omit stages that do not apply, but keep the order
-of those that remain.
+Two rounds total per ticket. Omit stages that do not apply.
 
 ## Reviewer handoff (statefulness)
 
-Reviewers run in sequence, so each must know what the previous ones found.
+Same-round reviewers run in **parallel**, so they cannot read each other's
+reports. That is fine: scopes are exclusive, so they should not collide.
 
-- The ticket-orchestrator passes the paths of every earlier report in the round
-  (`docs/reviews/<id>/<role>.md`) into each reviewer's prompt.
-- A reviewer must **not** re-report a finding already in a prior report. It may
-  **concur** (state agreement, add nothing) or **dissent** (explain why the prior
-  finding is wrong), and may add findings only within its own scope.
+- Round 1 cannot seed prior reports; each reviewer works only from the ticket
+  and the diff.
+- Round 2 seeds each reviewer with the full set of **round-1 reports** and the
+  implementor's fixes. A reviewer must **not** re-report a finding already
+  addressed or accepted there. It may **concur** (state agreement, add nothing)
+  or **dissent** (explain why the prior finding is wrong), and may add findings
+  only within its own scope.
 - Findings carry **no severity labels**. If a reviewer flags it, it is treated as
   work: it gets fixed, or deferred with a named target and a reason. Reviewers
   therefore report only what they would actually stand behind.

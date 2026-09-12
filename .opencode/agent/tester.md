@@ -34,10 +34,11 @@ More tests is not better. Keep them where they earn their place and omit them
 where they hinder development. Call out both missing *and* excessive tests.
 
 ## How
-- Read the ticket, the diff, the test sources, and the earlier reports the
-  ticket-orchestrator passes you.
-- Do not re-report a finding already in an earlier report. Concur (say so, add
-  nothing) or dissent (explain why it is wrong).
+- Read the ticket, the diff, and the test sources. Same-round peers run in
+  parallel, so you will not see their reports; stay within your own scope.
+- In round 2 you are given the round-1 reports: do not re-report a finding
+  already addressed there. Concur (say so, add nothing) or dissent (explain why
+  it is wrong).
 - Do not run the build or the test suite. The implementor runs it and hands
   over a green tree; a red suite is a process problem, not a finding.
 - Reference concrete files and lines.

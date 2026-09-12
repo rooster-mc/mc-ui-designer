@@ -31,10 +31,11 @@ rewrites; flag only what genuinely slows a reader down. If you cannot say why a
 change would be fixed, do not report it.
 
 ## How
-- Read the diff, the full files it touches, and the earlier reports the
-  ticket-orchestrator passes you.
-- Do not re-report a finding already in an earlier report. Concur (say so, add
-  nothing) or dissent (explain why it is wrong).
+- Read the diff and the full files it touches. Same-round peers run in
+  parallel, so you will not see their reports; stay within your own scope.
+- In round 2 you are given the round-1 reports: do not re-report a finding
+  already addressed there. Concur (say so, add nothing) or dissent (explain why
+  it is wrong).
 - Judge formatting from the code; the implementor runs the formatter/lint and
   hands over a clean tree. Do not run long tools yourself.
 - Reference concrete files and lines.
