@@ -1,6 +1,6 @@
 ---
 name: Import a design file as named chest scaffolds
-status: todo
+status: in-progress
 parent: Import
 depends-on: [150]
 reviewers: [tester, correctness, architecture, readability, ux]

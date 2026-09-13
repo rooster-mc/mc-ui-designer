@@ -23,7 +23,7 @@ goes through the review pipeline in `docs/workflow.md`.
 | [130](130-consume-rooster-commands-gaps.md) | Consume rooster-commands root executor and suggestion dedupe | Polish | 100 | done |
 | [140](140-clipped-double-chest.md) | Abort export on a double chest clipped by the selection | Polish | — | done |
 | [150](150-required-unique-names.md) | Require unique chest names for export | Import | — | done |
-| [160](160-scaffold.md) | Import a design file as named chest scaffolds | Import | 150 | todo |
+| [160](160-scaffold.md) | Import a design file as named chest scaffolds | Import | 150 | in-progress |
 | [170](170-status-sync.md) | Reconcile chest contents from a design file | Import | 150, 160 | todo |
 
 ## Template
