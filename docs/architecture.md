@@ -29,9 +29,13 @@ uidesigner/
   export/
     UiChest.kt               UiChest / UiRow / UiSlot + DesignJson config
     JsonExporter.kt          UiChest -> JSON string/file (atomic write; single ordering authority)
+    JsonImporter.kt          JSON file -> List<UiChest> + schema validation (pure, no Bukkit)
     ExportValidation.kt      pure name validation: unnamed positions, duplicate groups
+  place/
+    MaterialResolver.kt      item id -> Boolean (reader's injected matcher; production = Material.matchMaterial != null)
+    ScaffoldPlacer.kt        UiChest list + anchor -> placed chest blocks (atomic pre-check)
   commands/
-    UiDesignerCommand.kt     /uidesigner save | reload | help (+ its message bodies)
+    UiDesignerCommand.kt     /uidesigner save | scaffold | reload | help (+ its message bodies)
     ChestEditCommand.kt      /chest-edit <name> (+ its message bodies)
   util/
     Messages.kt              shared chat styling primitives (prefix, palette, styled)
@@ -150,23 +154,73 @@ uidesigner/
   (no export) carrying both lists, so an unnamed-and-duplicate selection is
   reported in one message. `JsonExporter` no longer strips blank chest names;
   slot-name blank-stripping is unchanged.
+- **`JsonImporter` keeps `export` Bukkit-free behind a matcher seam (160).**
+  `read(file, materialMatcher: (String) -> Boolean)` reads the file, decodes it
+  with `DesignJson`, and validates order-independently: each name is non-blank
+  and unique under `trim().lowercase()` (original spelling preserved), `rows` is
+  in 1..6, each row is in `1..rows`, each slot is in 1..9, and each item id
+  satisfies the injected matcher; the first violation throws
+  `InvalidDesignException` naming the file and the entry (index, name, row,
+  slot). An empty design is rejected up front ("the design contains no
+  chests"), so a zero-entry file can never reach the placer and report a green
+  no-op. `InvalidDesignException` is not a `Path`-only concern, so the reader
+  never names a Bukkit type. The production matcher is
+  `place/MaterialResolver.isKnown` (`Material.matchMaterial(id) != null`); the
+  command injects it as the reader default, and tests pass a set predicate. IO
+  failures surface as the underlying `IOException` (a missing file is
+  `NoSuchFileException`), so the command can separate them from parse failures.
+  `InvalidDesignException` carries `file` and `detail` separately; the command
+  renders the resolved file once with the detail, and translates a kotlinx
+  `SerializationException` to a fixed "not valid JSON" phrase rather than
+  echoing parser offsets.
+- **`place/ScaffoldPlacer` owns layout and the atomic pre-check (160).** It takes
+  a `World`, `List<UiChest>`, anchor `BlockPos`, view `BlockFace`, and an
+  `occupied: (Block) -> Boolean` predicate (default `{ false }`). The row runs
+  across the view along `view.rotateYClockwise()`, every chest faces
+  `view.oppositeFace`, and a 6-row entry becomes a `RIGHT` block at the lower
+  offset plus a `LEFT` block one step along the row; the earlier position is
+  `RIGHT` so the pair links under vanilla's clockwise/counter-clockwise
+  `getConnectedDirection` rule (the same rule the grouper's fallback uses). Any
+  other row count is a single. Replaceability is `target.type.isAir ||
+  target.isReplaceable` (`Block.isReplaceable` = Bukkit `Tag.REPLACEABLE`), and
+  a target inside the player's bounding box is also blocked; the first blocked
+  entry carries whether it was the player or a solid block so the command can
+  word the recovery differently. The whole plan is checked before any write; on
+  obstruction nothing is placed. Blocks are placed empty first (type plus
+  `Chest` data), then named with `ChestNamer.setName`, which names both halves
+  of a linked double. The `Player` entry point resolves the anchor as the
+  targeted block within reach, falling back to the block in front of the
+  player's feet, and derives view from `Player.facing`; MockBukkit cannot form a
+  real `DoubleChest` and its `getTargetBlockExact`/`getFacing` throw, so the
+  layout and pairing are unit-tested through the explicit `World`/anchor/view
+  overload and the real double is a manual-test entry.
+- **`UiDesignerConfig` owns scaffold path resolution.** `resolvePath(raw)` is the
+  single data-folder-normalising rule (relative paths join the data folder,
+  absolute paths pass through and are normalised); `outputFile` uses it, and the
+  command delegates to it rather than re-branching. `jsonFiles()` lists the
+  `.json` files there for tab completion (empty when the folder is missing or
+  unreadable). `scaffold`'s optional greedy `file` argument uses the configured
+  `output-file` when omitted or blank, and `resolvePath(raw)` otherwise, so a
+  suggested name round-trips.
 - **Chest predicate duplication.** `ChestScanner` and `ChestNamer` each define
   their own chest-material check (`CHEST`/`TRAPPED_CHEST` plus
   `Tag.COPPER_CHESTS`, whose eight variants are also `Chest`/`ChestData` on this
   Paper version); this is a deliberate carry-over until a third consumer appears,
   then extract one shared `isChest`.
 - **`UiDesignerCommand`** is the integration point for `/uidesigner save |
-  reload | help`. It composes `ChestCapture`, `DoubleChestGrouper`,
+  scaffold | reload | help`. It composes `ChestCapture`, `DoubleChestGrouper`,
   `ChestNamer`, and `JsonExporter` without owning their logic, and injects a
   `(Player) -> Region?` selection provider, a `() -> UiDesignerConfig`
-  provider, a reload action, and an exporter function so the pipeline is
+  provider, a reload action, an exporter function, a
+  `(Path) -> List<UiChest>` importer, and a
+  `(Player, List<UiChest>) -> PlacementResult` placer, so the pipeline is
   unit-testable without CommandAPI dispatch. `save` runs on the main thread;
   file IO stays synchronous for the MVP. This is a local tool, so there are no
-  permission checks: `save` is player-only (a non-player sender is silently
-  ignored), while `reload`, `help`, and the bare root accept any sender
-  (console included). Both commands are built with the `rooster-commands` DSL
-  (`literal`/`greedyString` nodes compiled to CommandAPI `CommandTree`s by the
-  library's `command-api` backend); `Messages` owns the shared styling
+  permission checks: `save` and `scaffold` are player-only (a non-player sender
+  is silently ignored), while `reload`, `help`, and the bare root accept any
+  sender (console included). Both commands are built with the `rooster-commands`
+  DSL (`literal`/`greedyString` nodes compiled to CommandAPI `CommandTree`s by
+  the library's `command-api` backend); `Messages` owns the shared styling
   primitives (prefix, colour palette, `styled`), while each command file owns
   its own message bodies as internal top-level functions, kept testable from
   the same module. The bare-command behaviour of both roots is a root
@@ -178,9 +232,13 @@ uidesigner/
   usage line and leaves the chest untouched, while `clear` is stored as an
   ordinary name. `save` validates the named, grouped chests with
   `validateForExport` and maps any failure to `InvalidNames` before touching the
-  output path. `reloadConfiguration()` returns a
-  `ReloadResult`, which `UiDesignerCommand` maps to its `ReloadOutcome`
-  (reloaded, defaults, invalid output, or failed).
+  output path. `scaffold` has a literal `onExecute` (the no-arg default) plus an
+  optional greedy `file` child whose suggestion list is the data folder's
+  `.json` files; it maps `PlacementResult`/import failures onto its
+  `ScaffoldOutcome` set (`Placed`, `NoTarget`, `ParseFailure`, `Obstructed`,
+  `IoFailure`). `reloadConfiguration()` returns a `ReloadResult`, which
+  `UiDesignerCommand` maps to its `ReloadOutcome` (reloaded, defaults, invalid
+  output, or failed).
 - **`JsonExporter`** is the single ordering authority: it sorts chests by
   canonical position and rows/slots by index. The grouper (040) merges double
   chests and must not re-sort; the exporter normalises order.
@@ -210,6 +268,30 @@ player + FAWE selection
         │  JsonExporter
         ▼
         JSON file (config.outputFile)
+```
+
+Scaffold is the reverse direction:
+
+```
+  file argument (or config.outputFile) + player
+        │  UiDesignerCommand.scaffold -> config.resolvePath / outputFile
+        ▼
+        Path (blank/absent uses config.outputFile)
+        │  JsonImporter.read(path, MaterialResolver.isKnown)
+        │    InvalidDesignException / SerializationException -> ParseFailure (no placement)
+        │    NoSuchFileException / IOException -> IoFailure (no placement)
+        ▼
+  List<UiChest>               (validated: non-empty, rows 1..6, rows/slots, items, names)
+        │  ScaffoldPlacer.place(player, chests)
+        │    anchor = targeted block ?: feet + view direction
+        │    layout = one row along view.rotateYClockwise(); 6 rows = RIGHT/LEFT
+        │    pre-check every target (air/replaceable, not player-occupied)
+        │    place all empty chests, then ChestNamer.setName each entry
+        ▼
+  PlacementResult             (Placed(count) | Obstructed(count, first, firstIsPlayer) | NoTarget)
+        │  UiDesignerCommand maps import failures and PlacementResult
+        ▼
+        ScaffoldOutcome (Placed | NoTarget | ParseFailure | Obstructed | IoFailure)
 ```
 
 ## Conventions

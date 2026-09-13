@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 
 class UiDesignerConfigTest {
@@ -122,6 +124,38 @@ class UiDesignerConfigTest {
 
         assertFalse(subject.writeDefaultOutputIfBlank())
         assertEquals("custom.json", config.getString(UiDesignerConfig.OUTPUT_FILE_KEY))
+    }
+
+    @Test
+    fun `a raw path resolves against the data folder`() {
+        val subject = UiDesignerConfig(config(), dataFolder)
+
+        assertEquals(
+            dataFolder.resolve("nested/shop.json"),
+            subject.resolvePath("nested/shop.json")
+        )
+    }
+
+    @Test
+    fun `json files lists only json files sorted`(
+        @TempDir directory: Path
+    ) {
+        Files.writeString(directory.resolve("beta.json"), "[]")
+        Files.writeString(directory.resolve("alpha.json"), "[]")
+        Files.writeString(directory.resolve("notes.txt"), "")
+        Files.createDirectory(directory.resolve("nested.json"))
+        val subject = UiDesignerConfig(config(), directory)
+
+        assertEquals(listOf("alpha.json", "beta.json"), subject.jsonFiles())
+    }
+
+    @Test
+    fun `json files is empty when the data folder is missing`(
+        @TempDir directory: Path
+    ) {
+        val subject = UiDesignerConfig(config(), directory.resolve("missing"))
+
+        assertEquals(emptyList<String>(), subject.jsonFiles())
     }
 
     private fun config(

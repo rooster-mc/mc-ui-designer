@@ -13,6 +13,11 @@ import dev.cypdashuhn.uidesigner.commands.reloadInvalidOutputMessage
 import dev.cypdashuhn.uidesigner.commands.reloadSuccessMessage
 import dev.cypdashuhn.uidesigner.commands.reloadUsingDefaultsMessage
 import dev.cypdashuhn.uidesigner.commands.saveSuccessMessage
+import dev.cypdashuhn.uidesigner.commands.scaffoldIoFailureMessage
+import dev.cypdashuhn.uidesigner.commands.scaffoldNoTargetMessage
+import dev.cypdashuhn.uidesigner.commands.scaffoldObstructedMessage
+import dev.cypdashuhn.uidesigner.commands.scaffoldParseFailureMessage
+import dev.cypdashuhn.uidesigner.commands.scaffoldSuccessMessage
 import dev.cypdashuhn.uidesigner.commands.usageMessage
 import dev.cypdashuhn.uidesigner.commands.writeFailedMessage
 import dev.cypdashuhn.uidesigner.export.DuplicateNameGroup
@@ -61,6 +66,7 @@ class MessagesTest {
     @Test
     fun `success messages are green`() {
         assertEquals(NamedTextColor.GREEN, saveSuccessMessage(1, path).color())
+        assertEquals(NamedTextColor.GREEN, scaffoldSuccessMessage(1, path).color())
         assertEquals(NamedTextColor.GREEN, reloadSuccessMessage(path).color())
         assertEquals(NamedTextColor.GREEN, namedMessage("Shop").color())
     }
@@ -74,6 +80,13 @@ class MessagesTest {
         assertEquals(NamedTextColor.RED, reloadFailedMessage("bad config").color())
         assertEquals(NamedTextColor.RED, noTargetMessage().color())
         assertEquals(NamedTextColor.RED, notAChestMessage().color())
+        assertEquals(NamedTextColor.RED, scaffoldNoTargetMessage().color())
+        assertEquals(NamedTextColor.RED, scaffoldParseFailureMessage(path, "bad rows").color())
+        assertEquals(
+            NamedTextColor.RED,
+            scaffoldObstructedMessage(1, BlockPos(0, 0, 0), firstIsPlayer = false).color(),
+        )
+        assertEquals(NamedTextColor.RED, scaffoldIoFailureMessage(path, null).color())
         assertEquals(
             NamedTextColor.RED,
             invalidNamesMessage(listOf(BlockPos(0, 0, 0)), emptyList()).color(),
@@ -106,6 +119,63 @@ class MessagesTest {
     @Test
     fun `save success uses the singular for one design`() {
         assertTrue(plain(saveSuccessMessage(1, path)).contains("1 chest design"))
+    }
+
+    @Test
+    fun `scaffold success reports the count and path with the double-chest note`() {
+        val text = plain(scaffoldSuccessMessage(2, path))
+        assertTrue(text.contains("2 chest designs"))
+        assertTrue(text.contains(path.toString()))
+        assertTrue(text.contains("double chest counts once"))
+    }
+
+    @Test
+    fun `scaffold success uses the singular for one design`() {
+        assertTrue(plain(scaffoldSuccessMessage(1, path)).contains("1 chest design"))
+    }
+
+    @Test
+    fun `scaffold obstruction names the count the position and the block recovery`() {
+        val text = plain(scaffoldObstructedMessage(3, BlockPos(4, 5, 6), firstIsPlayer = false))
+
+        assertTrue(text.contains("3 target blocks are obstructed"))
+        assertTrue(text.contains("(4, 5, 6)"))
+        assertTrue(text.contains("not replaceable"))
+        assertTrue(text.contains("nothing placed"))
+    }
+
+    @Test
+    fun `scaffold obstruction uses the singular and the player recovery`() {
+        val text = plain(scaffoldObstructedMessage(1, BlockPos(4, 5, 6), firstIsPlayer = true))
+
+        assertTrue(text.contains("1 target block is obstructed"))
+        assertTrue(text.contains("inside your body"))
+        assertTrue(text.contains("step aside"))
+    }
+
+    @Test
+    fun `scaffold parse failure names the path and the entry`() {
+        val text = plain(scaffoldParseFailureMessage(path, "entry #1 has rows=7"))
+
+        assertTrue(text.contains(path.toString()))
+        assertTrue(text.contains("entry #1 has rows=7"))
+    }
+
+    @Test
+    fun `scaffold IO failure names the path and falls back to the hint`() {
+        val missing = plain(scaffoldIoFailureMessage(path, null))
+        assertTrue(missing.contains(path.toString()))
+        assertTrue(missing.contains("check the file exists and is readable"))
+
+        val unresolved = plain(scaffoldIoFailureMessage(null, null))
+        assertTrue(unresolved.contains("check the output-file setting"))
+    }
+
+    @Test
+    fun `scaffold no target points at the anchor fallback`() {
+        val text = plain(scaffoldNoTargetMessage())
+        assertTrue(text.contains("no world or usable target block"))
+        assertTrue(text.contains("open space"))
     }
 
     @Test
@@ -237,6 +307,15 @@ class MessagesTest {
         listOf(
             "help" to helpMessage(),
             "saveSuccess" to saveSuccessMessage(2, path),
+            "scaffoldSuccess" to scaffoldSuccessMessage(2, path),
+            "scaffoldNoTarget" to scaffoldNoTargetMessage(),
+            "scaffoldParseFailure" to scaffoldParseFailureMessage(path, "entry #1 has rows=7"),
+            "scaffoldObstructedBlock" to
+                scaffoldObstructedMessage(3, BlockPos(4, 5, 6), firstIsPlayer = false),
+            "scaffoldObstructedPlayer" to
+                scaffoldObstructedMessage(1, BlockPos(4, 5, 6), firstIsPlayer = true),
+            "scaffoldIoFailure" to scaffoldIoFailureMessage(path, null),
+            "scaffoldIoFailureNoPath" to scaffoldIoFailureMessage(null, null),
             "noSelection" to noSelectionMessage(),
             "noChests" to noChestsMessage(),
             "writeFailed" to writeFailedMessage(path, "disk full"),

@@ -140,6 +140,22 @@ Out of scope (backlog):
   (in-sync/updated/missing/orphan/unjoinable) and `sync` applies file contents
   to matched chests. Orphans are reported, never deleted; structure drift is
   reported, not auto-repaired.
+- **Scaffold reads purely and places thinly.** `JsonImporter` lives in the pure
+  `export` package: it deserializes the file and validates `rows` 1..6, row/slot
+  ranges, item ids, and non-blank unique names (trimmed, case-insensitive,
+  original casing preserved), failing closed with the file and offending entry.
+  An empty design is rejected the same way, so `scaffold` can never report a
+  green no-op. Material resolution is a Bukkit concern, so the reader takes a
+  `(String) -> Boolean` matcher and the command passes `place/MaterialResolver`
+  (`Material.matchMaterial`). `place/ScaffoldPlacer` owns the physical layout: a
+  single row across the player's view at the anchor's Y, every chest facing the
+  player, `rows == 6` as a linked `RIGHT`/`LEFT` double and every other row
+  count as a single (a world chest only has 3 or 6 rows, so 1/2/4/5 are a
+  structural approximation). Before placing anything it pre-checks every target
+  (air or `Block.isReplaceable`, and not inside the player) and aborts
+  atomically, reporting the count and whether the first obstruction is the
+  player or a solid block so the message can say how to recover. `scaffold` is
+  not idempotent yet; re-running places a fresh row (repair is deferred).
 
 ## Naming
 

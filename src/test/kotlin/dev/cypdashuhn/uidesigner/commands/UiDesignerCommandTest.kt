@@ -5,14 +5,19 @@ import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.cypdashuhn.uidesigner.export.DesignJson
 import dev.cypdashuhn.uidesigner.export.DuplicateNameGroup
+import dev.cypdashuhn.uidesigner.export.InvalidDesignException
 import dev.cypdashuhn.uidesigner.export.JsonExporter
 import dev.cypdashuhn.uidesigner.export.NamedPosition
 import dev.cypdashuhn.uidesigner.export.UiChest
+import dev.cypdashuhn.uidesigner.export.UiRow
+import dev.cypdashuhn.uidesigner.export.UiSlot
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
+import dev.cypdashuhn.uidesigner.place.PlacementResult
 import dev.jorel.commandapi.CommandAPITestUtilities
 import dev.jorel.commandapi.MockCommandAPIPlugin
 import dev.rooster.region.BlockPos
 import dev.rooster.region.Region
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.bukkit.Location
@@ -21,6 +26,7 @@ import org.bukkit.block.Block
 import org.bukkit.block.BlockFace
 import org.bukkit.block.Chest
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.java.JavaPlugin
 import org.junit.jupiter.api.AfterEach
@@ -35,7 +41,9 @@ import org.mockbukkit.mockbukkit.ServerMock
 import org.mockbukkit.mockbukkit.block.data.ChestDataMock
 import org.mockbukkit.mockbukkit.entity.PlayerMock
 import org.mockbukkit.mockbukkit.world.WorldMock
+import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import org.bukkit.block.data.type.Chest as ChestData
 
@@ -780,6 +788,7 @@ class UiDesignerCommandTest {
 
         val message = plainMessage()
         assertTrue(message.contains("save"))
+        assertTrue(message.contains("scaffold"))
         assertTrue(message.contains("reload"))
         assertTrue(message.contains("help"))
         assertTrue(message.contains("chest-edit"))
@@ -824,6 +833,7 @@ class UiDesignerCommandTest {
             "help",
             "reload",
             "save",
+            "scaffold",
         )
     }
 
@@ -832,42 +842,426 @@ class UiDesignerCommandTest {
             .plainText()
             .serialize(checkNotNull(player.nextComponentMessage()))
 
+    @Test
+    fun `scaffold reads the configured output file by default`() {
+        var imported: Path? = null
+        val command =
+            unregisteredCommand(
+                importer = { path ->
+                    imported = path
+                    emptyList()
+                },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(DEFAULT_OUTPUT, imported)
+        assertEquals(UiDesignerCommand.ScaffoldOutcome.Placed(0, DEFAULT_OUTPUT), outcome)
+    }
+
+    @Test
+    fun `scaffold reads the configured output file for a blank argument`() {
+        var imported: Path? = null
+        val command =
+            unregisteredCommand(
+                importer = { path ->
+                    imported = path
+                    emptyList()
+                },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        command.scaffold(player, "   ")
+
+        assertEquals(DEFAULT_OUTPUT, imported)
+    }
+
+    @Test
+    fun `scaffold resolves a relative file against the data folder`(
+        @TempDir directory: Path
+    ) {
+        var imported: Path? = null
+        val command =
+            unregisteredCommand(
+                outputFile = directory.resolve("default.json"),
+                dataFolder = directory,
+                importer = { path ->
+                    imported = path
+                    emptyList()
+                },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        command.scaffold(player, "design.json")
+
+        assertEquals(directory.resolve("design.json"), imported)
+    }
+
+    @Test
+    fun `scaffold reads an absolute file unchanged`() {
+        var imported: Path? = null
+        val absolute = Path.of("/tmp/elsewhere/design.json")
+        val command =
+            unregisteredCommand(
+                importer = { path ->
+                    imported = path
+                    emptyList()
+                },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        command.scaffold(player, absolute.toString())
+
+        assertEquals(absolute, imported)
+    }
+
+    @Test
+    fun `scaffold reports the placed chest count`() {
+        val chests = listOf(UiChest("Shop", 3, emptyList()), UiChest("Mine", 6, emptyList()))
+        val command =
+            unregisteredCommand(
+                importer = { chests },
+                placer = { _, received ->
+                    assertEquals(chests, received)
+                    PlacementResult.Placed(2)
+                },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(UiDesignerCommand.ScaffoldOutcome.Placed(2, DEFAULT_OUTPUT), outcome)
+    }
+
+    @Test
+    fun `scaffold reports an obstruction`() {
+        val blocked = BlockPos(4, 5, 6)
+        val command =
+            unregisteredCommand(
+                importer = { emptyList() },
+                placer = { _, _ -> PlacementResult.Obstructed(3, blocked, firstIsPlayer = false) },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(
+            UiDesignerCommand.ScaffoldOutcome.Obstructed(3, blocked, firstIsPlayer = false),
+            outcome,
+        )
+    }
+
+    @Test
+    fun `scaffold reports a player-occupied obstruction`() {
+        val blocked = BlockPos(4, 5, 6)
+        val command =
+            unregisteredCommand(
+                importer = { emptyList() },
+                placer = { _, _ -> PlacementResult.Obstructed(1, blocked, firstIsPlayer = true) },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(
+            UiDesignerCommand.ScaffoldOutcome.Obstructed(1, blocked, firstIsPlayer = true),
+            outcome,
+        )
+    }
+
+    @Test
+    fun `scaffold reports no target`() {
+        val command =
+            unregisteredCommand(
+                importer = { emptyList() },
+                placer = { _, _ -> PlacementResult.NoTarget },
+            )
+
+        assertEquals(UiDesignerCommand.ScaffoldOutcome.NoTarget, command.scaffold(player, null))
+    }
+
+    @Test
+    fun `scaffold reports a parse failure without throwing`() {
+        val command =
+            unregisteredCommand(
+                importer = { throw InvalidDesignException(DEFAULT_OUTPUT, "bad rows") },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(
+            UiDesignerCommand.ScaffoldOutcome.ParseFailure(DEFAULT_OUTPUT, "bad rows"),
+            outcome,
+        )
+    }
+
+    @Test
+    fun `scaffold reports an IO failure without throwing`() {
+        val command =
+            unregisteredCommand(
+                importer = { throw IOException("missing") },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(
+            UiDesignerCommand.ScaffoldOutcome.IoFailure(DEFAULT_OUTPUT, "missing"),
+            outcome,
+        )
+    }
+
+    @Test
+    fun `scaffold reports an unresolvable path without throwing`() {
+        val command =
+            unregisteredCommand(
+                importer = { emptyList() },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        val outcome = command.scaffold(player, "\u0000")
+
+        val failure = outcome as UiDesignerCommand.ScaffoldOutcome.IoFailure
+        assertEquals(null, failure.file)
+        assertTrue(failure.reason!!.isNotBlank())
+    }
+
+    @Test
+    fun `scaffold reports a missing file without duplicating the path`() {
+        val command =
+            unregisteredCommand(
+                importer = { throw NoSuchFileException("/tmp/design.json") },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(UiDesignerCommand.ScaffoldOutcome.IoFailure(DEFAULT_OUTPUT, null), outcome)
+    }
+
+    @Test
+    fun `scaffold translates a malformed JSON failure`() {
+        val command =
+            unregisteredCommand(
+                importer = { throw SerializationException("syntax error at offset 4") },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(
+            UiDesignerCommand.ScaffoldOutcome.ParseFailure(
+                DEFAULT_OUTPUT,
+                "the file is not valid JSON"
+            ),
+            outcome,
+        )
+    }
+
+    @Test
+    fun `scaffold imports an exported file through the production importer`(
+        @TempDir directory: Path
+    ) {
+        val target = directory.resolve("design.json")
+        val designs =
+            listOf(
+                UiChest(
+                    name = "Shop",
+                    rows = 3,
+                    content = listOf(UiRow(1, listOf(UiSlot(1, "minecraft:stone")))),
+                    position = BlockPos(0, 0, 0),
+                )
+            )
+        Files.writeString(target, JsonExporter.toJson(designs))
+        var received: List<UiChest>? = null
+        val command =
+            UiDesignerCommand(
+                plugin = MockBukkit.createMockPlugin(),
+                selectionProvider = { null },
+                configProvider = { config(directory.resolve("default.json"), directory) },
+                reloadAction = { ReloadResult.Reloaded },
+                placer = { _, chests ->
+                    received = chests
+                    PlacementResult.Placed(1)
+                },
+            )
+
+        val outcome = command.scaffold(player, target.toString())
+
+        assertEquals(UiDesignerCommand.ScaffoldOutcome.Placed(1, target), outcome)
+        assertEquals(listOf("Shop"), received?.map { it.name })
+        assertEquals(listOf(3), received?.map { it.rows })
+    }
+
+    @Test
+    fun `dispatch of scaffold reports the placed count`() {
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            importer = { emptyList() },
+            placer = { _, _ -> PlacementResult.Placed(2) },
+        )
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner scaffold")
+
+        assertTrue(plainMessage().contains("Scaffolded 2 chest designs"))
+    }
+
+    @Test
+    fun `dispatch of scaffold reads the supplied file`(
+        @TempDir directory: Path
+    ) {
+        val target = directory.resolve("design.json")
+        var imported: Path? = null
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            importer = { path ->
+                imported = path
+                emptyList()
+            },
+            placer = { _, _ -> PlacementResult.Placed(1) },
+        )
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner scaffold $target")
+
+        assertEquals(target, imported)
+    }
+
+    @Test
+    fun `dispatch of scaffold reports an obstruction at the first blocked position`() {
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            importer = { emptyList() },
+            placer = { _, _ ->
+                PlacementResult.Obstructed(2, BlockPos(1, 2, 3), firstIsPlayer = false)
+            },
+        )
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner scaffold")
+
+        val message = plainMessage()
+        assertTrue(message.contains("2 target blocks are obstructed"))
+        assertTrue(message.contains("(1, 2, 3)"))
+        assertTrue(message.contains("nothing placed"))
+    }
+
+    @Test
+    fun `dispatch of scaffold reports a parse failure`() {
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            importer = {
+                throw InvalidDesignException(Path.of("ignored.json"), "entry #1 has rows=7")
+            },
+            placer = { _, _ -> PlacementResult.Placed(0) },
+        )
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner scaffold")
+
+        val message = plainMessage()
+        assertTrue(message.contains(DEFAULT_OUTPUT.toString()))
+        assertTrue(message.contains("entry #1 has rows=7"))
+    }
+
+    @Test
+    fun `console scaffold does not import or place`() {
+        var imported = 0
+        var placed = 0
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            importer = {
+                imported++
+                emptyList()
+            },
+            placer = { _, _ ->
+                placed++
+                PlacementResult.Placed(1)
+            },
+        )
+
+        CommandAPITestUtilities.assertCommandSucceeds(server.consoleSender, "uidesigner scaffold")
+        CommandAPITestUtilities.assertCommandSucceeds(
+            server.consoleSender,
+            "uidesigner scaffold design.json",
+        )
+
+        assertEquals(0, imported)
+        assertEquals(0, placed)
+    }
+
+    @Test
+    fun `scaffold suggests json files in the data folder`(
+        @TempDir directory: Path
+    ) {
+        Files.writeString(directory.resolve("beta.json"), "[]")
+        Files.writeString(directory.resolve("alpha.json"), "[]")
+        Files.writeString(directory.resolve("notes.txt"), "")
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            outputFile = directory.resolve("design.json"),
+            dataFolder = directory,
+        )
+
+        CommandAPITestUtilities.assertCommandSuggests(
+            player,
+            "uidesigner scaffold ",
+            "alpha.json",
+            "beta.json",
+        )
+    }
+
     private fun registeredCommand(
         plugin: JavaPlugin,
         region: Region? = null,
         outputFile: Path = DEFAULT_OUTPUT,
+        dataFolder: Path = Path.of(""),
         reloadAction: () -> ReloadResult = { ReloadResult.Reloaded },
         exporter: (List<UiChest>, Path) -> Unit = { _, _ -> },
+        importer: (Path) -> List<UiChest> = { emptyList() },
+        placer: (Player, List<UiChest>) -> PlacementResult = { _, _ -> PlacementResult.Placed(0) },
     ) {
         UiDesignerCommand(
             plugin = plugin,
             selectionProvider = { region },
-            configProvider = { config(outputFile) },
+            configProvider = { config(outputFile, dataFolder) },
             reloadAction = reloadAction,
             exporter = exporter,
+            importer = importer,
+            placer = placer,
         ).register()
     }
 
     private fun unregisteredCommand(
         region: Region? = null,
         outputFile: Path = DEFAULT_OUTPUT,
+        dataFolder: Path = Path.of(""),
         exporter: (List<UiChest>, Path) -> Unit = { _, _ -> },
+        importer: (Path) -> List<UiChest> = { emptyList() },
+        placer: (Player, List<UiChest>) -> PlacementResult = { _, _ -> PlacementResult.Placed(0) },
     ): UiDesignerCommand =
         UiDesignerCommand(
             plugin = MockBukkit.createMockPlugin(),
             selectionProvider = { region },
-            configProvider = { config(outputFile) },
+            configProvider = { config(outputFile, dataFolder) },
             reloadAction = { ReloadResult.Reloaded },
             exporter = exporter,
+            importer = importer,
+            placer = placer,
         )
 
-    private fun config(outputFile: Path): UiDesignerConfig =
+    private fun config(outputFile: Path, dataFolder: Path = Path.of("")): UiDesignerConfig =
         UiDesignerConfig(
             YamlConfiguration().apply {
                 set(UiDesignerConfig.OUTPUT_FILE_KEY, outputFile.toString())
             },
-            // Tests pass absolute paths, so this data folder is never resolved.
-            dataFolder = Path.of(""),
+            dataFolder = dataFolder,
         )
 
     private fun blockAt(material: Material, x: Int, y: Int, z: Int): Block =
