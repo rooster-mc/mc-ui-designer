@@ -1,6 +1,6 @@
 ---
 name: Require unique chest names for export
-status: in-progress
+status: done
 parent: Import
 depends-on: []
 reviewers: [tester, correctness, architecture, readability, ux]
