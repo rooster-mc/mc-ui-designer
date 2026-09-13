@@ -8,6 +8,7 @@ import org.bukkit.Material
 import org.bukkit.block.Block
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -43,36 +44,14 @@ class ChestEditCommandTest {
     }
 
     @Test
-    fun `apply clears a named chest`() {
+    fun `apply treats clear as an ordinary name`() {
         val chest = blockAt(Material.CHEST)
         ChestNamer.setName(chest, "Shop")
 
         val outcome = command().apply(chest, "clear")
 
-        assertEquals(ChestEditCommand.Outcome.Cleared, outcome)
-        assertNull(ChestNamer.nameOf(chest))
-    }
-
-    @Test
-    fun `apply clears case-insensitively`() {
-        val chest = blockAt(Material.CHEST)
-        ChestNamer.setName(chest, "Shop")
-
-        val outcome = command().apply(chest, "CLEAR")
-
-        assertEquals(ChestEditCommand.Outcome.Cleared, outcome)
-        assertNull(ChestNamer.nameOf(chest))
-    }
-
-    @Test
-    fun `apply treats a blank name as clear`() {
-        val chest = blockAt(Material.CHEST)
-        ChestNamer.setName(chest, "Shop")
-
-        val outcome = command().apply(chest, "   ")
-
-        assertEquals(ChestEditCommand.Outcome.Cleared, outcome)
-        assertNull(ChestNamer.nameOf(chest))
+        assertEquals(ChestEditCommand.Outcome.Named("clear"), outcome)
+        assertEquals("clear", ChestNamer.nameOf(chest))
     }
 
     @Test
@@ -90,21 +69,21 @@ class ChestEditCommandTest {
     }
 
     @Test
-    fun `apply reports nothing to clear on an unnamed chest`() {
-        val chest = blockAt(Material.CHEST)
-
-        assertEquals(ChestEditCommand.Outcome.NothingToClear, command().apply(chest, "clear"))
-        assertEquals(ChestEditCommand.Outcome.NothingToClear, command().apply(chest, "   "))
-    }
-
-    @Test
-    fun `apply trims a whitespace-padded clear sentinel`() {
+    fun `apply treats a blank name as usage and leaves the name unchanged`() {
         val chest = blockAt(Material.CHEST)
         ChestNamer.setName(chest, "Shop")
 
-        val outcome = command().apply(chest, "  clear  ")
+        val outcome = command().apply(chest, "   ")
 
-        assertEquals(ChestEditCommand.Outcome.Cleared, outcome)
+        assertEquals(ChestEditCommand.Outcome.BlankName, outcome)
+        assertEquals("Shop", ChestNamer.nameOf(chest))
+    }
+
+    @Test
+    fun `apply treats a blank name as usage on an unnamed chest`() {
+        val chest = blockAt(Material.CHEST)
+
+        assertEquals(ChestEditCommand.Outcome.BlankName, command().apply(chest, "   "))
         assertNull(ChestNamer.nameOf(chest))
     }
 
@@ -131,7 +110,7 @@ class ChestEditCommandTest {
     }
 
     @Test
-    fun `command dispatch clears via the reserved sentinel`() {
+    fun `command dispatch names a chest clear`() {
         val chest = blockAt(Material.CHEST)
         ChestNamer.setName(chest, "Shop")
         val plugin = MockCommandAPIPlugin.load()
@@ -140,20 +119,19 @@ class ChestEditCommandTest {
 
         CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit clear")
 
-        assertNull(ChestNamer.nameOf(chest))
+        assertEquals("clear", ChestNamer.nameOf(chest))
     }
 
     @Test
-    fun `command dispatch clears a whitespace-padded sentinel`() {
+    fun `command dispatch trims a whitespace-padded name`() {
         val chest = blockAt(Material.CHEST)
-        ChestNamer.setName(chest, "Shop")
         val plugin = MockCommandAPIPlugin.load()
         ChestEditCommand(plugin) { chest }.register()
         val player = opPlayer()
 
-        CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit  clear ")
+        CommandAPITestUtilities.assertCommandSucceeds(player, "chest-edit  Shop ")
 
-        assertNull(ChestNamer.nameOf(chest))
+        assertEquals("Shop", ChestNamer.nameOf(chest))
     }
 
     @Test
@@ -167,7 +145,8 @@ class ChestEditCommandTest {
 
         val message = plainMessage(player)
         assertTrue(message.contains("Usage"))
-        assertTrue(message.contains("clear"))
+        assertTrue(message.contains("<name>"))
+        assertFalse(message.contains("clear"))
         assertNull(ChestNamer.nameOf(chest))
     }
 
@@ -182,19 +161,15 @@ class ChestEditCommandTest {
     }
 
     @Test
-    fun `tab completion suggests clear`() {
+    fun `tab completion does not suggest clear`() {
         val plugin = MockCommandAPIPlugin.load()
         ChestEditCommand(plugin) { null }.register()
 
-        CommandAPITestUtilities.assertCommandSuggests(opPlayer(), "chest-edit ", "clear")
-    }
-
-    @Test
-    fun `tab completion suggests clear for a partial name`() {
-        val plugin = MockCommandAPIPlugin.load()
-        ChestEditCommand(plugin) { null }.register()
-
-        CommandAPITestUtilities.assertCommandSuggests(opPlayer(), "chest-edit cl", "clear")
+        CommandAPITestUtilities.assertCommandSuggests(
+            opPlayer(),
+            "chest-edit ",
+            emptyList<String>(),
+        )
     }
 
     private fun opPlayer(): PlayerMock = server.addPlayer().apply { isOp = true }

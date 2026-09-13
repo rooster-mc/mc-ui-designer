@@ -58,7 +58,7 @@ object DoubleChestGrouper {
     }
 
     private fun uiChest(items: List<ItemStack?>, position: BlockPos): UiChest =
-        UiChest(rows = rowCount(items), content = rows(items), position = position)
+        UiChest(name = "", rows = rowCount(items), content = rows(items), position = position)
 
     private fun match(
         region: Region,

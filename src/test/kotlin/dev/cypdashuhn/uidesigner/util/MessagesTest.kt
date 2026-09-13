@@ -1,6 +1,6 @@
 package dev.cypdashuhn.uidesigner.util
 
-import dev.cypdashuhn.uidesigner.commands.clearedMessage
+import dev.cypdashuhn.uidesigner.commands.duplicateNamesMessage
 import dev.cypdashuhn.uidesigner.commands.helpMessage
 import dev.cypdashuhn.uidesigner.commands.invalidOutputFileMessage
 import dev.cypdashuhn.uidesigner.commands.namedMessage
@@ -8,18 +8,21 @@ import dev.cypdashuhn.uidesigner.commands.noChestsMessage
 import dev.cypdashuhn.uidesigner.commands.noSelectionMessage
 import dev.cypdashuhn.uidesigner.commands.noTargetMessage
 import dev.cypdashuhn.uidesigner.commands.notAChestMessage
-import dev.cypdashuhn.uidesigner.commands.nothingToClearMessage
 import dev.cypdashuhn.uidesigner.commands.reloadFailedMessage
 import dev.cypdashuhn.uidesigner.commands.reloadInvalidOutputMessage
 import dev.cypdashuhn.uidesigner.commands.reloadSuccessMessage
 import dev.cypdashuhn.uidesigner.commands.reloadUsingDefaultsMessage
 import dev.cypdashuhn.uidesigner.commands.saveSuccessMessage
+import dev.cypdashuhn.uidesigner.commands.unnamedChestsMessage
 import dev.cypdashuhn.uidesigner.commands.usageMessage
 import dev.cypdashuhn.uidesigner.commands.writeFailedMessage
+import dev.cypdashuhn.uidesigner.export.DuplicateNameGroup
+import dev.rooster.region.BlockPos
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
@@ -60,7 +63,6 @@ class MessagesTest {
         assertEquals(NamedTextColor.GREEN, saveSuccessMessage(1, path).color())
         assertEquals(NamedTextColor.GREEN, reloadSuccessMessage(path).color())
         assertEquals(NamedTextColor.GREEN, namedMessage("Shop").color())
-        assertEquals(NamedTextColor.GREEN, clearedMessage().color())
     }
 
     @Test
@@ -72,13 +74,19 @@ class MessagesTest {
         assertEquals(NamedTextColor.RED, reloadFailedMessage("bad config").color())
         assertEquals(NamedTextColor.RED, noTargetMessage().color())
         assertEquals(NamedTextColor.RED, notAChestMessage().color())
+        assertEquals(NamedTextColor.RED, unnamedChestsMessage(listOf(BlockPos(0, 0, 0))).color())
+        assertEquals(
+            NamedTextColor.RED,
+            duplicateNamesMessage(
+                listOf(DuplicateNameGroup("Shop", listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0))))
+            ).color(),
+        )
     }
 
     @Test
     fun `warnings are yellow`() {
         assertEquals(NamedTextColor.YELLOW, reloadUsingDefaultsMessage(path).color())
         assertEquals(NamedTextColor.YELLOW, reloadInvalidOutputMessage(path).color())
-        assertEquals(NamedTextColor.YELLOW, nothingToClearMessage().color())
     }
 
     @Test
@@ -147,16 +155,42 @@ class MessagesTest {
     }
 
     @Test
-    fun `chest edit nothing to clear is a distinct warning`() {
-        assertTrue(plain(nothingToClearMessage()).contains("no name"))
-    }
-
-    @Test
-    fun `chest edit usage explains naming and clearing`() {
+    fun `chest edit usage explains naming only`() {
         val text = plain(usageMessage())
         assertTrue(text.contains("Usage"))
         assertTrue(text.contains("<name>"))
-        assertTrue(text.contains("clear"))
+        assertFalse(text.contains("clear"))
+    }
+
+    @Test
+    fun `unnamed chests message lists the positions`() {
+        val text =
+            plain(unnamedChestsMessage(listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0))))
+
+        assertTrue(text.contains("2 chests have no name"))
+        assertTrue(text.contains("(0, 0, 0)"))
+        assertTrue(text.contains("(2, 0, 0)"))
+        assertTrue(text.contains("/chest-edit <name>"))
+    }
+
+    @Test
+    fun `unnamed chests message uses the singular`() {
+        assertTrue(plain(unnamedChestsMessage(listOf(BlockPos(0, 0, 0)))).contains("1 chest has"))
+    }
+
+    @Test
+    fun `duplicate names message reports the name and positions`() {
+        val text =
+            plain(
+                duplicateNamesMessage(
+                    listOf(DuplicateNameGroup("Shop", listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0))))
+                )
+            )
+
+        assertTrue(text.contains("\"Shop\""))
+        assertTrue(text.contains("(0, 0, 0)"))
+        assertTrue(text.contains("(2, 0, 0)"))
+        assertTrue(text.contains("unique"))
     }
 
     private fun allMessages(): List<Pair<String, Component>> =
@@ -176,8 +210,11 @@ class MessagesTest {
             "reloadFailed" to reloadFailedMessage("bad config"),
             "reloadFailedFallback" to reloadFailedMessage(null),
             "chestEditNamed" to namedMessage("Shop"),
-            "chestEditCleared" to clearedMessage(),
-            "chestEditNothingToClear" to nothingToClearMessage(),
+            "chestEditUnnamed" to unnamedChestsMessage(listOf(BlockPos(0, 0, 0))),
+            "chestEditDuplicate" to
+                duplicateNamesMessage(
+                    listOf(DuplicateNameGroup("Shop", listOf(BlockPos(0, 0, 0))))
+                ),
             "chestEditNoTarget" to noTargetMessage(),
             "chestEditNotAChest" to notAChestMessage(),
             "chestEditUsage" to usageMessage(),

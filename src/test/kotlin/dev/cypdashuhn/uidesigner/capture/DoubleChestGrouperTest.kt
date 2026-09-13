@@ -58,7 +58,7 @@ class DoubleChestGrouperTest {
         assertTrue(result.clipped.isEmpty())
         val ui = result.chests.single()
         assertEquals(3, ui.rows)
-        assertNull(ui.name)
+        assertEquals("", ui.name)
         assertEquals(BlockPos(0, 0, 0), ui.position)
         assertEquals(
             mapOf((1 to 1) to "minecraft:stone", (2 to 1) to "minecraft:dirt"),

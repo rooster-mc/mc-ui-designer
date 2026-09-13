@@ -5,8 +5,10 @@ import dev.cypdashuhn.uidesigner.capture.ClippedHalf
 import dev.cypdashuhn.uidesigner.capture.DoubleChestGrouper
 import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
+import dev.cypdashuhn.uidesigner.export.DuplicateNameGroup
 import dev.cypdashuhn.uidesigner.export.JsonExporter
 import dev.cypdashuhn.uidesigner.export.UiChest
+import dev.cypdashuhn.uidesigner.export.validateForExport
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
 import dev.cypdashuhn.uidesigner.util.Messages
 import dev.rooster.commands.commandapi.command
@@ -44,6 +46,14 @@ class UiDesignerCommand(
 
         data class ClippedChests(
             val clipped: List<ClippedHalf>,
+        ) : SaveOutcome
+
+        data class UnnamedChests(
+            val positions: List<BlockPos>,
+        ) : SaveOutcome
+
+        data class DuplicateNames(
+            val duplicates: List<DuplicateNameGroup>,
         ) : SaveOutcome
 
         data class InvalidOutputFile(
@@ -90,10 +100,17 @@ class UiDesignerCommand(
         if (grouped.clipped.isNotEmpty()) return SaveOutcome.ClippedChests(grouped.clipped)
         val named =
             grouped.chests.map { chest ->
-                chest.copy(
-                    name = chest.position?.let { position -> nameAt(selection.region, position) },
-                )
+                val name =
+                    chest.position?.let { position -> nameAt(selection.region, position) }.orEmpty()
+                chest.copy(name = name)
             }
+        val validation = validateForExport(named)
+        if (validation.unnamed.isNotEmpty()) {
+            return SaveOutcome.UnnamedChests(validation.unnamed)
+        }
+        if (validation.duplicates.isNotEmpty()) {
+            return SaveOutcome.DuplicateNames(validation.duplicates)
+        }
         val outputFile =
             try {
                 configProvider().outputFile
@@ -131,6 +148,8 @@ class UiDesignerCommand(
             SaveOutcome.NoChests -> noChestsMessage()
             is SaveOutcome.WriteFailed -> writeFailedMessage(outcome.outputFile, outcome.reason)
             is SaveOutcome.ClippedChests -> clippedChestsMessage(outcome.clipped)
+            is SaveOutcome.UnnamedChests -> unnamedChestsMessage(outcome.positions)
+            is SaveOutcome.DuplicateNames -> duplicateNamesMessage(outcome.duplicates)
             is SaveOutcome.InvalidOutputFile -> invalidOutputFileMessage(outcome.reason)
         }
 
@@ -147,7 +166,7 @@ private const val HELP_TEXT =
     "UiDesigner commands:\n" +
         "/uidesigner save - export the selected chest designs to JSON.\n" +
         "/uidesigner reload - reload config.yml.\n" +
-        "/chest-edit <name> - name or clear the chest you are looking at.\n" +
+        "/chest-edit <name> - name the chest you are looking at.\n" +
         "/uidesigner help - show this help."
 
 private const val WRITE_FAILURE_HINT = "check that the output folder exists and is writable"
@@ -199,6 +218,28 @@ internal fun clippedChestsMessage(clipped: List<ClippedHalf>): Component {
 }
 
 private fun BlockPos.coords(): String = "($x, $y, $z)"
+
+internal fun unnamedChestsMessage(positions: List<BlockPos>): Component {
+    val count = positions.size
+    val subject = if (count == 1) "1 chest has" else "$count chests have"
+    val pronoun = if (count == 1) "it" else "them"
+    val listed = positions.joinToString(", ") { it.coords() }
+    return Messages.styled(
+        Messages.errorColor,
+        "Cannot export: $subject no name. Name $pronoun with /chest-edit <name>: $listed.",
+    )
+}
+
+internal fun duplicateNamesMessage(duplicates: List<DuplicateNameGroup>): Component {
+    val listed =
+        duplicates.joinToString("; ") { group ->
+            "\"${group.name}\" at ${group.positions.joinToString(", ") { it.coords() }}"
+        }
+    return Messages.styled(
+        Messages.errorColor,
+        "Cannot export: chest names must be unique. Duplicates: $listed.",
+    )
+}
 
 internal fun writeFailedMessage(outputFile: Path?, reason: String?): Component {
     val target = outputFile?.let { " to $it" } ?: ""

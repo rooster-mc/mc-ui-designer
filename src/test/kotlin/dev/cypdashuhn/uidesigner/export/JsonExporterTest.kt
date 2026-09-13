@@ -14,7 +14,7 @@ import java.nio.file.attribute.PosixFilePermissions
 
 class JsonExporterTest {
     @Test
-    fun `named and unnamed chests serialize to the documented snapshot`() {
+    fun `named chests serialize to the documented snapshot`() {
         val chests =
             listOf(
                 UiChest(
@@ -27,6 +27,7 @@ class JsonExporterTest {
                     position = BlockPos(0, 0, 0),
                 ),
                 UiChest(
+                    name = "Mine",
                     rows = 3,
                     content = listOf(UiRow(row = 1, slots = listOf(slot(2, "minecraft:diamond")))),
                     position = BlockPos(1, 0, 0),
@@ -91,7 +92,7 @@ class JsonExporterTest {
     }
 
     @Test
-    fun `a blank chest name is treated as unnamed`() {
+    fun `a blank chest name is preserved as an empty name`() {
         val chests =
             listOf(
                 chest(
@@ -103,7 +104,7 @@ class JsonExporterTest {
 
         val decoded = DesignJson.decodeFromString<List<UiChest>>(JsonExporter.toJson(chests))
 
-        assertNull(decoded.single().name)
+        assertEquals("   ", decoded.single().name)
     }
 
     @Test
@@ -239,7 +240,7 @@ class JsonExporterTest {
         assertEquals("previous", Files.readString(target))
     }
 
-    private fun chest(name: String?, position: BlockPos, vararg content: UiRow) =
+    private fun chest(name: String, position: BlockPos, vararg content: UiRow) =
         UiChest(name = name, rows = 3, content = content.toList(), position = position)
 
     private fun slot(slot: Int, item: String, name: String? = null) =
@@ -266,6 +267,7 @@ class JsonExporterTest {
             |        ]
             |    },
             |    {
+            |        "name": "Mine",
             |        "rows": 3,
             |        "content": [
             |            {

@@ -4,6 +4,7 @@ import dev.cypdashuhn.uidesigner.capture.ClippedHalf
 import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.cypdashuhn.uidesigner.export.DesignJson
+import dev.cypdashuhn.uidesigner.export.DuplicateNameGroup
 import dev.cypdashuhn.uidesigner.export.JsonExporter
 import dev.cypdashuhn.uidesigner.export.UiChest
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
@@ -24,7 +25,6 @@ import org.bukkit.plugin.java.JavaPlugin
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -86,14 +86,15 @@ class UiDesignerCommandTest {
     }
 
     @Test
-    fun `save exports named and unnamed chests to the configured path`(
+    fun `save exports all-named chests to the configured path`(
         @TempDir directory: Path
     ) {
-        val named = blockAt(Material.CHEST, 0, 0, 0)
-        (named.state as Chest).blockInventory.setItem(0, ItemStack(Material.STONE))
-        ChestNamer.setName(named, "Shop")
-        val unnamed = blockAt(Material.CHEST, 2, 0, 0)
-        (unnamed.state as Chest).blockInventory.setItem(0, ItemStack(Material.DIRT))
+        val shop = blockAt(Material.CHEST, 0, 0, 0)
+        (shop.state as Chest).blockInventory.setItem(0, ItemStack(Material.STONE))
+        ChestNamer.setName(shop, "Shop")
+        val mine = blockAt(Material.CHEST, 2, 0, 0)
+        (mine.state as Chest).blockInventory.setItem(0, ItemStack(Material.DIRT))
+        ChestNamer.setName(mine, "Mine")
         var exported: List<UiChest>? = null
         var target: Path? = null
         val output = directory.resolve("design.json")
@@ -111,7 +112,7 @@ class UiDesignerCommandTest {
         assertEquals(UiDesignerCommand.SaveOutcome.Exported(2, output), outcome)
         assertEquals(output, target)
         val exportedChests = checkNotNull(exported)
-        assertEquals(listOf("Shop", null), exportedChests.map { it.name })
+        assertEquals(listOf("Shop", "Mine"), exportedChests.map { it.name })
         assertEquals(
             listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0)),
             exportedChests.map { it.position },
@@ -119,10 +120,69 @@ class UiDesignerCommandTest {
     }
 
     @Test
+    fun `save reports an unnamed chest and writes no file`(
+        @TempDir directory: Path
+    ) {
+        val shop = blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(shop, "Shop")
+        blockAt(Material.CHEST, 2, 0, 0)
+        var exporterCalls = 0
+        val output = directory.resolve("design.json")
+
+        val outcome =
+            unregisteredCommand(
+                region = region(0, 0, 0, 2, 0, 0),
+                outputFile = output,
+                exporter = { _, _ -> exporterCalls++ },
+            ).save(player)
+
+        assertEquals(
+            UiDesignerCommand.SaveOutcome.UnnamedChests(listOf(BlockPos(2, 0, 0))),
+            outcome,
+        )
+        assertEquals(0, exporterCalls)
+        assertFalse(Files.exists(output))
+    }
+
+    @Test
+    fun `save reports duplicate names and writes no file`(
+        @TempDir directory: Path
+    ) {
+        val shop = blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(shop, "Shop")
+        val other = blockAt(Material.CHEST, 2, 0, 0)
+        ChestNamer.setName(other, "  shop  ")
+        var exporterCalls = 0
+        val output = directory.resolve("design.json")
+
+        val outcome =
+            unregisteredCommand(
+                region = region(0, 0, 0, 2, 0, 0),
+                outputFile = output,
+                exporter = { _, _ -> exporterCalls++ },
+            ).save(player)
+
+        assertEquals(
+            UiDesignerCommand.SaveOutcome.DuplicateNames(
+                listOf(
+                    DuplicateNameGroup(
+                        name = "Shop",
+                        positions = listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0)),
+                    )
+                )
+            ),
+            outcome,
+        )
+        assertEquals(0, exporterCalls)
+        assertFalse(Files.exists(output))
+    }
+
+    @Test
     fun `save counts a double chest as a single design`(
         @TempDir directory: Path
     ) {
         val left = blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(left, "Shop")
         left.blockData =
             ChestDataMock(Material.CHEST).apply {
                 type = ChestData.Type.LEFT
@@ -150,7 +210,7 @@ class UiDesignerCommandTest {
         val exportedChests = checkNotNull(exported)
         assertEquals(1, exportedChests.size)
         assertEquals(6, exportedChests.single().rows)
-        assertNull(exportedChests.single().name)
+        assertEquals("Shop", exportedChests.single().name)
     }
 
     @Test
@@ -323,7 +383,7 @@ class UiDesignerCommandTest {
 
     @Test
     fun `save reports a write failure without throwing`() {
-        blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
 
         val outcome =
             unregisteredCommand(
@@ -339,7 +399,7 @@ class UiDesignerCommandTest {
 
     @Test
     fun `save reports an unusable config path without throwing`() {
-        blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
         val command =
             UiDesignerCommand(
                 plugin = MockBukkit.createMockPlugin(),
@@ -358,7 +418,7 @@ class UiDesignerCommandTest {
 
     @Test
     fun `save reports an unusable config path without a message`() {
-        blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
         val command =
             UiDesignerCommand(
                 plugin = MockBukkit.createMockPlugin(),
@@ -444,7 +504,7 @@ class UiDesignerCommandTest {
 
     @Test
     fun `dispatch of save exports for an op`() {
-        blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
         var exported = false
         val plugin = MockCommandAPIPlugin.load()
         registeredCommand(
@@ -460,8 +520,51 @@ class UiDesignerCommandTest {
     }
 
     @Test
+    fun `dispatch of save reports an unnamed chest`() {
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
+        blockAt(Material.CHEST, 2, 0, 0)
+        var exported = false
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            region(0, 0, 0, 2, 0, 0),
+            exporter = { _, _ -> exported = true },
+        )
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
+
+        val message = plainMessage()
+        assertTrue(message.contains("(2, 0, 0)"))
+        assertTrue(message.contains("no name"))
+        assertFalse(exported)
+    }
+
+    @Test
+    fun `dispatch of save reports duplicate names and both positions`() {
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
+        ChestNamer.setName(blockAt(Material.CHEST, 2, 0, 0), "shop")
+        var exported = false
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            region(0, 0, 0, 2, 0, 0),
+            exporter = { _, _ -> exported = true },
+        )
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
+
+        val message = plainMessage()
+        assertTrue(message.contains("Shop"))
+        assertTrue(message.contains("(0, 0, 0)"))
+        assertTrue(message.contains("(2, 0, 0)"))
+        assertFalse(exported)
+    }
+
+    @Test
     fun `dispatch of save reports an unusable output path`() {
-        blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
         val plugin = MockCommandAPIPlugin.load()
         UiDesignerCommand(
             plugin = plugin,

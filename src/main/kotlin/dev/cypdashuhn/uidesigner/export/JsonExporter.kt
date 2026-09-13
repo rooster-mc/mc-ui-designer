@@ -1,6 +1,5 @@
 package dev.cypdashuhn.uidesigner.export
 
-import dev.rooster.region.BlockPos
 import kotlinx.serialization.encodeToString
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -35,7 +34,6 @@ object JsonExporter {
             .sortedBy { (_, position) -> position }
             .map { (chest, _) ->
                 chest.copy(
-                    name = chest.name?.takeIf { it.isNotBlank() },
                     content =
                         chest.content
                             .sortedBy { it.row }
@@ -43,9 +41,6 @@ object JsonExporter {
                             .filter { it.slots.isNotEmpty() },
                 )
             }
-
-    private fun UiChest.requiredPosition(): BlockPos =
-        requireNotNull(position) { "UiChest.position must be set before export" }
 
     private fun UiRow.ordered(): UiRow =
         copy(

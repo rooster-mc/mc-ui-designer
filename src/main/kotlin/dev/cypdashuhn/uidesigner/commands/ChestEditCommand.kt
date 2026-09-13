@@ -6,9 +6,7 @@ import dev.rooster.commands.argOrNull
 import dev.rooster.commands.commandapi.command
 import dev.rooster.commands.onExecute
 import dev.rooster.commands.playerOrNull
-import dev.rooster.commands.suggestStrings
 import dev.rooster.commands.types.greedyString
-import dev.rooster.commands.types.literal
 import net.kyori.adventure.text.Component
 import org.bukkit.block.Block
 import org.bukkit.entity.Player
@@ -26,9 +24,7 @@ class ChestEditCommand(
             val name: String
         ) : Outcome
 
-        data object Cleared : Outcome
-
-        data object NothingToClear : Outcome
+        data object BlankName : Outcome
 
         data object NoTarget : Outcome
 
@@ -41,16 +37,10 @@ class ChestEditCommand(
                 val player = playerOrNull ?: return@onExecute
                 player.sendMessage(usageMessage())
             }
-            greedyString("name")
-                .suggestStrings { listOf("clear") }
-                .onExecute {
-                    val player = playerOrNull ?: return@onExecute
-                    val rawName = argOrNull<String>("name") ?: return@onExecute
-                    player.sendMessage(outcomeMessage(apply(targetResolver(player), rawName)))
-                }
-            literal("clear").onExecute {
+            greedyString("name").onExecute {
                 val player = playerOrNull ?: return@onExecute
-                player.sendMessage(outcomeMessage(apply(targetResolver(player), "clear")))
+                val rawName = argOrNull<String>("name") ?: return@onExecute
+                player.sendMessage(outcomeMessage(apply(targetResolver(player), rawName)))
             }
         }.register(plugin)
     }
@@ -58,8 +48,7 @@ class ChestEditCommand(
     private fun outcomeMessage(outcome: Outcome) =
         when (outcome) {
             is Outcome.Named -> namedMessage(outcome.name)
-            Outcome.Cleared -> clearedMessage()
-            Outcome.NothingToClear -> nothingToClearMessage()
+            Outcome.BlankName -> usageMessage()
             Outcome.NoTarget -> noTargetMessage()
             Outcome.NotAChest -> notAChestMessage()
         }
@@ -68,11 +57,7 @@ class ChestEditCommand(
         if (target == null) return Outcome.NoTarget
         if (!ChestNamer.isChest(target)) return Outcome.NotAChest
         val name = rawName.trim()
-        if (name.isEmpty() || name.equals("clear", ignoreCase = true)) {
-            if (ChestNamer.nameOf(target) == null) return Outcome.NothingToClear
-            ChestNamer.clear(target)
-            return Outcome.Cleared
-        }
+        if (name.isEmpty()) return Outcome.BlankName
         ChestNamer.setName(target, name)
         return Outcome.Named(name)
     }
@@ -81,18 +66,11 @@ class ChestEditCommand(
 internal fun usageMessage(): Component =
     Messages.styled(
         Messages.infoColor,
-        "Usage: /chest-edit <name> - name the chest you are looking at, " +
-            "or /chest-edit clear to remove the name.",
+        "Usage: /chest-edit <name> - name the chest you are looking at.",
     )
 
 internal fun namedMessage(name: String): Component =
     Messages.styled(Messages.successColor, "Named this chest \"$name\".")
-
-internal fun clearedMessage(): Component =
-    Messages.styled(Messages.successColor, "Cleared this chest's name.")
-
-internal fun nothingToClearMessage(): Component =
-    Messages.styled(Messages.infoColor, "This chest has no name.")
 
 internal fun noTargetMessage(): Component =
     Messages.styled(Messages.errorColor, "Not looking at a chest (or it is out of reach).")

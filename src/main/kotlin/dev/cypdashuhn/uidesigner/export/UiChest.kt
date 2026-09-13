@@ -13,11 +13,14 @@ val DesignJson =
 
 @Serializable
 data class UiChest(
-    val name: String? = null,
+    val name: String,
     val rows: Int,
     val content: List<UiRow>,
     @Transient val position: BlockPos? = null,
 )
+
+internal fun UiChest.requiredPosition(): BlockPos =
+    requireNotNull(position) { "UiChest.position must be set before export" }
 
 @Serializable
 data class UiRow(

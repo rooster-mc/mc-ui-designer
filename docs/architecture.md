@@ -29,9 +29,10 @@ uidesigner/
   export/
     UiChest.kt               UiChest / UiRow / UiSlot + DesignJson config
     JsonExporter.kt          UiChest -> JSON string/file (atomic write; single ordering authority)
+    ExportValidation.kt      pure name validation: unnamed positions, duplicate groups
   commands/
     UiDesignerCommand.kt     /uidesigner save | reload | help (+ its message bodies)
-    ChestEditCommand.kt      /chest-edit <name> | clear (+ its message bodies)
+    ChestEditCommand.kt      /chest-edit <name> (+ its message bodies)
   util/
     Messages.kt              shared chat styling primitives (prefix, palette, styled)
 ```
@@ -135,9 +136,18 @@ uidesigner/
   an unloaded chunk to load. Chests are `CHEST`, `TRAPPED_CHEST`, and the copper
   chest variants (`Tag.COPPER_CHESTS`), so a clipped copper double is detected
   the same way.
-- **Grouper returns `UiChest` with `name = null` and does not order.**
-  `UiDesignerCommand` populates names via `ChestNamer.nameOf` at each canonical
-  position, and `JsonExporter` remains the ordering authority.
+- **Grouper returns `UiChest` with a blank placeholder name and does not order.**
+  `UiChest.name` is non-null, so the grouper emits `name = ""`; `UiDesignerCommand`
+  populates names via `ChestNamer.nameOf` at each canonical position (mapping a
+  missing name back to `""`), and `JsonExporter` remains the ordering authority.
+- **`validateForExport(chests)` is the name gate (150).** It lives in the pure
+  `export` package and returns an `ExportValidation` carrying the positions of
+  unnamed chests and the `DuplicateNameGroup`s. A name is blank when it trims to
+  empty; names are grouped by `trim().lowercase()` and the group keeps the first
+  spelling's original casing. `UiDesignerCommand` runs it on the named, grouped
+  chests before resolving the output path, returning `UnnamedChests` or
+  `DuplicateNames` (no export) on failure. `JsonExporter` no longer strips blank
+  chest names; slot-name blank-stripping is unchanged.
 - **Chest predicate duplication.** `ChestScanner` and `ChestNamer` each define
   their own chest-material check (`CHEST`/`TRAPPED_CHEST` plus
   `Tag.COPPER_CHESTS`, whose eight variants are also `Chest`/`ChestData` on this
@@ -161,13 +171,12 @@ uidesigner/
   `onExecute { ... }` on the `command(...)` scope, so no direct
   `CommandTree.executes` remains: `/uidesigner` prints help for any sender,
   `/chest-edit` prints usage for a player and stays a silent no-op for console.
-  CommandAPI suggests the registered subcommand literals automatically; the
-  optional greedy `name` node also suggests `clear`, and the compiler dedupes
-  that value against the sibling `clear` literal (`excludingLiterals`) so it is
-  offered once (a `CommandTree` branches at the root, so the literal does not
-  need to be a reserved sentinel name; any-casing, blank, and whitespace-padded
-  "clear" still route through the greedy branch and `apply`'s
-  trim/case-insensitive handling). `reloadConfiguration()` returns a
+  `/chest-edit` has a single optional greedy `name` node (no `clear` literal and
+  no custom suggestion list); a blank or whitespace-only argument prints the
+  usage line and leaves the chest untouched, while `clear` is stored as an
+  ordinary name. `save` validates the named, grouped chests with
+  `validateForExport` and maps failures to `UnnamedChests`/`DuplicateNames`
+  before touching the output path. `reloadConfiguration()` returns a
   `ReloadResult`, which `UiDesignerCommand` maps to its `ReloadOutcome`
   (reloaded, defaults, invalid output, or failed).
 - **`JsonExporter`** is the single ordering authority: it sorts chests by
@@ -188,12 +197,14 @@ player + FAWE selection
         │  DoubleChestGrouper.group(selection.region, selection.contents)
         │  -> region.blockAt(position)
         ▼
-  GroupResult                 (chests: List<UiChest>, names still null;
-        │                      clipped: List<ClippedHalf>)
+  GroupResult                 (chests: List<UiChest>, names blank; clipped: List<ClippedHalf>)
         │  UiDesignerCommand: clipped -> ClippedChests (no export)
         │                     else ChestNamer.nameOf at each canonical position
         ▼
   List<UiChest>               (names populated)
+        │  validateForExport -> UnnamedChests / DuplicateNames (no export)
+        ▼
+  List<UiChest>               (named and unique)
         │  JsonExporter
         ▼
         JSON file (config.outputFile)
