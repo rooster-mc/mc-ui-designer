@@ -67,3 +67,52 @@ not enforce it.
   describe nullable names or `/chest-edit clear` are historical records, not
   docs to keep current. `manual-test.md` MT-007/MT-009/MT-012 are consistent with
   the removed sentinel.
+
+## Round 2
+### Verdict
+Ship. My round-1 finding is fixed in `507ac95`: `docs/data-format.md` and
+`docs/design.md` now attribute the name gate to the save path / `validateForExport`
+and state that `JsonExporter` only orders and strips blank slot names, matching
+`docs/architecture.md`. The `InvalidNames`/`NamedPosition` refactor keeps the
+seams sound and leaves the architecture docs accurate. No new findings.
+
+### Findings
+None.
+
+### Non-findings
+- **`validateForExport` seam unchanged by the refactor.**
+  `ExportValidation.kt` remains in the pure `export` package (only
+  `dev.rooster.region.BlockPos` imported), still returns
+  `ExportValidation(unnamed, duplicates)`, and is still invoked by
+  `UiDesignerCommand.save` after naming/grouping and before `configProvider()`
+  (`commands/UiDesignerCommand.kt:104-107`). The gate and its position relative
+  to the output path is untouched.
+- **`DuplicateNameGroup(entries)` / `NamedPosition` are the right shape.**
+  Replacing `name + positions` with `entries: List<NamedPosition>` removes the
+  "one representative spelling" lie that `group.first().name` carried and lets
+  the message print each colliding spelling with its own position
+  (`UiDesignerCommand.kt:232-240`). A one-field wrapper plus a name+position pair
+  is a small, justified type: it is consumed by both the outcome and the message
+  builder and is not a premature generalisation. The docs describe exactly this
+  (`docs/architecture.md:143-152`).
+- **`ExportValidation.isValid` now earns its keep.** My round-1 note that it was
+  only read by tests no longer applies: `save` now branches on
+  `if (!validation.isValid)` (`UiDesignerCommand.kt:105`), and the single
+  `InvalidNames(validation.unnamed, validation.duplicates)` outcome carries both
+  lists. The old two-outcome precedence is gone, so the combined-message fix and
+  the abstraction reinforce each other rather than duplicating a decision.
+- **No doc staleness from the rename.** `architecture.md` no longer names
+  `UnnamedChests`/`DuplicateNames` anywhere (package listing, seam bullet,
+  integration bullet, and data-flow diagram all say `InvalidNames`), and the
+  validator bullet names `NamedPosition`. `data-format.md:75-78` and
+  `design.md:125-131` are consistent with the code; the only surviving
+  `UnnamedChests`/`DuplicateNames` strings live in historical ticket text
+  (`docs/tasks/150-...md`) and round-1 review reports, not living docs.
+- **The other round-1 fixes are architecture-neutral.** The added
+  config-throwing tests (tester), the `saveUnnamed`/`saveDuplicate` message keys
+  and `JsonExporterTest` rename (readability), and the combined
+  `invalidNamesMessage` with the case/whitespace explanation and per-spelling
+  list (ux) touch tests and command message bodies only; no package, seam, or
+  extendability change beyond what is covered above. Extendability to 160/170 is
+  unaffected: the outcome stays internal to `UiDesignerCommand`, and the import
+  path still never needs `validateForExport`.

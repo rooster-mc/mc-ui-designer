@@ -116,3 +116,79 @@ and `SHOP` cannot see *why* they collide.
   and MT-009 were updated to drop the removed `clear` suggestion. The remaining
   non-automatable parts (real selection, live Brigadier tree) are therefore
   tracked rather than lost.
+
+## Round 2
+
+### Verdict
+
+Ship. Both round-1 findings are resolved in `507ac95`: `save` now returns a
+single `SaveOutcome.InvalidNames` carrying `unnamed` and `duplicates`
+together, and the combined `invalidNamesMessage` reads as one coherent,
+truthful red `[UiDesigner]` sentence — it still names every position and the
+fixing command, now adds the case/whitespace comparison rule, and lists each
+colliding spelling with its own position. I found no new player-facing loop,
+feedback-truthfulness or discoverability problem in the fix.
+
+### Findings
+
+None. My two round-1 findings are both fixed and need no re-derivation:
+
+- Finding 1 (extra save cycle when a selection is both unnamed and duplicated)
+  is closed by `UiDesignerCommand.kt:104-107` returning `InvalidNames` with both
+  lists, and `invalidNamesMessage` (`:215-221`) joining both clauses.
+- Finding 2 (the message never explained the case/whitespace comparison and
+  showed one spelling) is closed by the
+  `"Chest names must be unique (compared ignoring case and surrounding spaces)."`
+  sentence and the per-entry `"<name>" at (x, y, z)` list (`:232-239`).
+
+### Non-findings
+
+- **The combined message is grammatically coherent and complete.** The two
+  clauses are built by `unnamedClause`/`duplicateClause` (each returns `null`
+  when its list is empty) and joined with a single space inside
+  `"Cannot export: $body"`, so the player sees only the relevant clauses and
+  never a dangling `"Cannot export: "` (at least one list is non-empty whenever
+  `InvalidNames` is returned). Rendered examples, all with the aqua prefix and
+  red body: only unnamed →
+  `"Cannot export: 1 chest has no name. Name it with /chest-edit <name>: (4, 0, 0)."`;
+  only duplicates →
+  `"Cannot export: Chest names must be unique (compared ignoring case and surrounding spaces). Duplicates: \"Shop\" at (0, 0, 0), \"SHOP\" at (2, 0, 0)."`;
+  both →
+  `"…1 chest has no name. Name it with /chest-edit <name>: (4, 0, 0). Chest names must be unique (compared ignoring case and surrounding spaces). Duplicates: …"`.
+  Each clause ends in one period, so there is no doubled or missing punctuation.
+- **The fix makes the failure more truthful without becoming noisy.** The
+  previous duplicate text named one spelling for a group that normalised two
+  (or more) spellings to the same key; the new `"…" at (x, y, z)` list shows the
+  actual pair, so a player who typed `Shop` and `SHOP` sees both and the
+  parenthetical explains why they collide. It is still one chat component (not
+  one line per chest), so the volume is unchanged in kind, and the unnamed
+  clause keeps its correct singular/plural
+  (`"1 chest has…"` / `"N chests have…"`, `"it"`/`"them"`).
+- **No success can be claimed from the failure path.** `save` returns
+  `InvalidNames` at `UiDesignerCommand.kt:104-107`, before
+  `configProvider().outputFile` (`:108-113`) and before `exporter(...)`
+  (`:114-119`), so the output path is not resolved and no file is written or
+  overwritten; `saveSuccessMessage` remains reachable only from `Exported`. The
+  round-1 tester's new throwing-config tests pin exactly this ordering for both
+  the unnamed and duplicate branches.
+- **The `/chest-edit` surface is untouched by the fix and still correct.**
+  Blank input still maps to the info-colour usage line and leaves the existing
+  name in place (`ChestEditCommand.kt:56-70`), `clear` is still an ordinary name
+  with the truthful green `"Named this chest \"clear\"."`, and `HELP_TEXT`
+  (`UiDesignerCommand.kt:158-163`) and `usageMessage()` still say only
+  `"/chest-edit <name> - name the chest you are looking at."`. No player-facing
+  `clear` sentinel remains under `src/main`.
+- **Discoverability is unchanged and adequate.** `ui`/`uid`, bare
+  `/uidesigner` and `/uidesigner help` still list the same commands, and
+  `/chest-edit` still offers no suggestions for the freeform name (correct for
+  an arbitrary string). The rule is learned at the first failing `save`, whose
+  message now carries both the positions and the reason; I still do not consider
+  a pre-emptive mention in the terse help text worth flagging as work.
+- **Round-1 peer findings are resolved or out of my scope, and I do not
+  re-report them.** tester's validation-before-output-path gap is now covered by
+  the two "never resolves the output path" tests; architecture's doc-attribution
+  fix landed in `docs/data-format.md`/`docs/design.md`; readability's
+  `chestEdit*` key labels and the `JsonExporterTest` name are renamed. The
+  remaining peer observations (doc wording, test cardinality, `ChestNamer.clear`
+  dead code) are correctness/architecture/readability matters, not player-facing
+  loop, feedback or discoverability issues.

@@ -66,3 +66,57 @@ ticket's Scope is not pinned by any test. Ship with that added.
   for a test of unnamed-vs-duplicate *precedence* when both are present
   (`UiDesignerCommand.kt:107-113`): the ticket does not specify which error
   wins, so a test would pin an unspecified product choice.
+
+## Round 2
+
+### Verdict
+Ship. My round-1 finding is fixed with the exact tests I asked for, and the
+`InvalidNames` / `NamedPosition` refactor is covered at both the pure-validator
+and `save`/dispatch layers without introducing brittle or excessive tests. No new
+findings.
+
+### Findings
+None.
+
+### Non-findings
+- **Concur with round-1 tester finding #1; it is fully addressed.**
+  `save never resolves the output path when a chest is unnamed`
+  (`UiDesignerCommandTest.kt:479-499`) and `...when names collide` (`:501-530`)
+  use a throwing `configProvider` and assert `InvalidNames`, so validation
+  before output resolution is now pinned for both failure modes — the exact
+  suggestion from round 1, and stronger than a call counter.
+- **The combined failure path is genuinely exercised.** The refactor made the
+  both-lists case reachable (`UiDesignerCommand.kt:104-106`), and it is covered
+  twice: `save reports unnamed and duplicate names in one outcome`
+  (`UiDesignerCommandTest.kt:188-222`) pins the `InvalidNames` value with both
+  lists populated, and `invalid names message reports unnamed and duplicates
+  together` (`MessagesTest.kt:212-234`) pins the rendered one-message output.
+  That is the right unit/wiring split, not duplication.
+- **The `DuplicateNameGroup.entries: List<NamedPosition>` change is well
+  pinned.** `ExportValidationTest.kt:26-50` and `:90-116` assert full
+  `NamedPosition` lists including each colliding spelling and its input order,
+  and `UiDesignerCommandTest.kt:169-181` asserts the whitespace-distinct
+  spellings survive to the outcome. The message test checks both spellings and
+  the new "compared ignoring case and surrounding spaces" wording
+  (`MessagesTest.kt:189-210`), so the ux round-1 fix has a matching regression
+  guard.
+- **The `allMessages()` meta-list intentionally omitting the combined variant is
+  not a gap.** `saveUnnamed`/`saveDuplicate` (`MessagesTest.kt:253-265`) cover
+  the prefix, palette colour, aqua prefix and trailing-period invariants, and
+  the combined body is `unnamedClause + " " + duplicateClause` where both
+  clauses are already in the list and each ends in a period; only the join is
+  new and its content test covers it. Adding the combined form would assert
+  nothing further.
+- **Readability round-1 fixes landed in the tests without loss.**
+  `allMessages()` keys are now `saveUnnamed`/`saveDuplicate` (`:253-254`), and
+  `JsonExporterTest.kt:95` is renamed to `a blank chest name is preserved
+  verbatim`; both still assert the same behaviour, so the renames cost no
+  coverage. No stale `UnnamedChests`/`DuplicateNames`/`unnamedChestsMessage`/
+  `duplicateNamesMessage` references remain in `src/main` or `src/test`.
+- **No new harness limit to record.** The combined-name failure is fully
+  automatable through MockBukkit (it is exercised above), so no
+  `docs/manual-test.md` addition is needed; MT-012 (`docs/manual-test.md:23`)
+  still accurately covers the live-FAWE unnamed/duplicate/`clear`/blank-arg
+  paths, and MT-009 (`:20`) the suggestion behaviour. The double-chest
+  name-reading limit remains covered by `ChestNamerTest` and MT-003/MT-011, as
+  noted in round 1, and is untouched by this fix.

@@ -63,3 +63,47 @@ validator otherwise read cleanly and are ktlint-shaped.
   (`ChestEditCommand.kt:15`, `JsonExporter.kt:64`) are pre-existing *why* comments.
 - No changed line exceeds 100 columns, and wrapping, trailing commas, and import
   order match the surrounding ktlint style.
+
+## Round 2
+
+### Verdict
+
+Ship. Both round-1 readability findings are fixed cleanly, and the `InvalidNames`
+/ `NamedPosition` / `invalidNamesMessage` refactor reads better than the split it
+replaces. I found nothing new in scope that I would stand behind changing.
+
+### Findings
+
+None. The refactor is a net readability gain: one outcome and one message builder
+replace two near-identical ones, and the clause helpers make the combined body
+easy to follow.
+
+### Non-findings
+
+- **Concur — round-1 finding 1 (`allMessages()` labels).** The keys are now
+  `"saveUnnamed"` and `"saveDuplicate"` (`MessagesTest.kt:253-265`), matching the
+  `saveSuccess` key family, while `chestEditNamed`/`chestEditNoTarget`/
+  `chestEditNotAChest`/`chestEditUsage` still mark the real chest-edit messages.
+  The naming now tells a reader which command each message belongs to.
+- **Concur — round-1 finding 2 (`JsonExporterTest` name).** The test is now
+  `a blank chest name is preserved verbatim` (`JsonExporterTest.kt:95`) and still
+  pins `"   "` round-tripping, so the name matches the asserted invariant.
+- `InvalidNames(unnamed, duplicates)` (`UiDesignerCommand.kt:51-54`) is a clear
+  merge of the former `UnnamedChests`/`DuplicateNames`; its fields name exactly
+  what `validateForExport` reports, and `save` now reads as one
+  `if (!validation.isValid) return …` gate (`:104-107`) instead of two sequential
+  returns. `ExportValidation.isValid` is consequently a production read now, which
+  answers the round-1 note that it was test-only.
+- `NamedPosition(name, position)` (`ExportValidation.kt:5-8`) and
+  `DuplicateNameGroup(entries)` (`:10-12`) are self-explanatory; keeping each
+  colliding spelling with its position is what lets `duplicateClause` show
+  `"Shop" at (0, 0, 0), "shop" at (2, 0, 0)` rather than a single canonical name.
+  The one-field `DuplicateNameGroup` wrapper names the concept, so it is not
+  needless indirection.
+- `invalidNamesMessage` (`UiDesignerCommand.kt:215-221`) is a two-line
+  composition: `listOfNotNull(unnamedClause(...), duplicateClause(...)).joinToString(" ")`.
+  The nullable clause helpers (`:223-240`) each read top-to-bottom as
+  "empty → skip, else build the sentence", and each sentence already ends in a
+  period, so the joined body has no double punctuation or double space.
+- No new comments were added; no changed line exceeds 100 columns, and import
+  order in `MessagesTest.kt:3-20` stays lexicographic.

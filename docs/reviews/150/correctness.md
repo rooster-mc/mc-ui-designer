@@ -67,3 +67,66 @@ None. Traced the full path (`/uidesigner save` → `ChestCapture` →
   so the validation change adds no new IO failure or partial-write window.
 - **Empty inventories / air slots / unnamed items** are untouched by this commit
   and remain handled by the existing scanner/exporter filters.
+
+## Round 2
+
+### Verdict
+
+Ship. Every round-1 finding is addressed, and the `InvalidNames` /
+`NamedPosition` refactor is behaviourally correct: validation still runs after
+grouping and before the output path is resolved, both failure kinds are
+preserved and reported in one red message, and the per-spelling entries are
+produced from the grouped chests in deterministic order. I found no new
+correctness issue.
+
+### Findings
+
+None new.
+
+### Non-findings
+
+- **Concur with architecture #1** (docs attributed the name gate to
+  `JsonExporter`). Fixed in `docs/data-format.md:75-79` and
+  `docs/design.md:125-130`: both now attribute validation to the save command
+  and reserve "the exporter" for ordering plus slot-name stripping, matching
+  `UiDesignerCommand.kt:104-113` and `JsonExporter.kt:16-51`. No code/doc
+  contradiction remains.
+- **Concur with ux #1/#2.** `InvalidNames` carries both `unnamed` and
+  `duplicates` (`UiDesignerCommand.kt:51-54`), `save` returns it whenever
+  `!validation.isValid` (`:104-107`), and `invalidNamesMessage` joins the unnamed
+  and duplicate clauses into one `errorColor` component (`:215-240`). The
+  duplicate clause now echoes every colliding spelling at its position via
+  `NamedPosition` (`ExportValidation.kt:5-12`, `:30-32`) and states the
+  case/whitespace rule. Traced a mixed selection (unnamed at `(4,0,0)` plus
+  `Shop`/`shop`): both clauses render from the same validation result, the
+  exporter is never called and no file is written.
+- **Concur with tester #1.** The new `save never resolves the output path …`
+  tests (`UiDesignerCommandTest.kt:480-530`) pin validation before
+  `configProvider()` by throwing from it; the production order at
+  `UiDesignerCommand.kt:104-113` satisfies that.
+- **Concur with readability #1/#2.** Test labels and a test name were corrected;
+  no source impact.
+- **`InvalidNames` / `isValid` semantics.** `isValid` is computed from both lists
+  (`ExportValidation.kt:18`) and is now read by production (`UiDesignerCommand.kt:105`),
+  so `save` can no longer disagree with the contents it reports. A blank-trimming
+  name goes to `unnamed` and is excluded from `duplicates`
+  (`ExportValidation.kt:22-25`), so every offending chest lands in exactly one
+  list; no chest is dropped and none is double-counted. `InvalidNames` is only
+  constructed under `!isValid`, so at least one list is always non-empty.
+- **`NamedPosition` semantics.** Entries are the raw spellings that normalise to
+  the same key, in first-seen order (`ExportValidation.kt:23-33`). The raw name
+  (surrounding whitespace included) is used only for display, never for
+  grouping, so grouping stays case/whitespace-insensitive while the message is
+  faithful. Positions use the same `requiredPosition()` as the exporter, so the
+  reported coordinates match the ordering authority's canonical position.
+- **Combined-message empty case is unreachable.** `invalidNamesMessage` builds
+  `listOfNotNull(unnamedClause(…), duplicateClause(…)).joinToString(" ")`
+  (`UiDesignerCommand.kt:219`); two empty lists would render `"Cannot export: "`,
+  but `save` can never produce `InvalidNames` with both lists empty. Latent /
+  defensive only, not worth a guard.
+- **No stale type references.** Grepping `src/` and `docs/` outside the
+  historical ticket/report files finds no remaining `UnnamedChests`,
+  `DuplicateNames`, or old `DuplicateNameGroup(name, positions)` usage.
+- **`docs/manual-test.md` MT-012 still matches.** It checks the unnamed position
+  and the duplicate name + both positions, which the combined message still
+  reports; no manual entry needs updating for the refactor.
