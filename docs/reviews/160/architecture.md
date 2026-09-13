@@ -1,0 +1,122 @@
+# Architecture review — 160 (Import a design file as named chest scaffolds)
+
+## Round 1
+### Verdict
+Ship with three small fixes. The `place/` package fits the established
+Bukkit-coupled/`export`-pure split, `JsonImporter` keeps `export` free of Bukkit
+behind an injected matcher, layout ownership stays in the world/placer, and
+`UiDesignerCommand` remains the integration point rather than the implementation.
+Two `docs/architecture.md` statements are stale/untruthful, and one path branch in
+the command duplicates config rather than delegating to it.
+
+### Findings
+#### 1. `resolveScaffoldFile` re-implements `UiDesignerConfig.resolve`'s absolute/normalise rule
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/UiDesignerCommand.kt:208-213`
+- Problem: `resolveScaffoldFile` branches on `Path.of(rawFile).isAbsolute` and calls
+  `path.normalize()` itself, then delegates the relative case to
+  `config.resolvePath(rawFile)`. `UiDesignerConfig.resolve`
+  (`config/UiDesignerConfig.kt:50-53`) already owns exactly that rule:
+  `(if (path.isAbsolute) path else dataFolder.resolve(path)).normalize()`. So there
+  are now two copies of the "absolute passes through, relative joins the data
+  folder" contract, and they will drift: a change to `resolvePath` (e.g. a new
+  relativisation or symlink rule) silently leaves the command's absolute branch
+  behind. The stated purpose of `resolvePath` in `docs/architecture.md:189-195`
+  ("exposes the same data-folder-normalising rule as `outputFile`") is undercut
+  when the caller only uses it for the relative case.
+- Suggested fix: keep only the blank guard and delegate everything else:
+  `if (rawFile.isNullOrBlank()) config.outputFile else config.resolvePath(rawFile)`.
+  `Path.of`/`InvalidPathException` handling is already covered by `config.resolve`,
+  and `scaffold`'s surrounding `try` still maps it to `IoFailure`.
+
+#### 2. Package tree describes `MaterialResolver` as returning a `Material`, but it returns a `Boolean`
+- Location: `docs/architecture.md:35`
+- Problem: the listing says
+  `MaterialResolver.kt  item id -> Bukkit Material (reader's injected matcher)`.
+  The code (`place/MaterialResolver.kt:6`) is
+  `fun isKnown(id: String): Boolean = Material.matchMaterial(id) != null`, and the
+  seam `JsonImporter.read(file, materialMatcher: (String) -> Boolean)`
+  (`export/JsonImporter.kt:12`) takes a predicate. The package tree therefore
+  misnames both the object's output type and, implicitly, the shape of the matcher
+  seam a reader would go looking for.
+- Suggested fix: describe it as the predicate it is, e.g.
+  `item id -> Boolean (reader's injected matcher; production = Material.matchMaterial != null)`.
+
+#### 3. Scaffold data-flow diagram places the placer's writes after `PlacementResult` and derives importer failures from it
+- Location: `docs/architecture.md:264-284` (the `Scaffold is the reverse
+  direction` block, specifically lines 275-283)
+- Problem: two things are misrepresented. First, the arrow after
+  `PlacementResult` reads `│ place empty chests, then ChestNamer.setName`, which
+  puts the placement side effect in `UiDesignerCommand` after it receives the
+  result. The placing and naming happen *inside* `ScaffoldPlacer.place`
+  (`place/ScaffoldPlacer.kt:70-73`) before `Placed` is returned; the command only
+  maps the result to a message. Second, the same arrow fans out to
+  `ScaffoldOutcome (... ParseFailure ... IoFailure)`, implying all five outcomes are
+  produced by the placer. `ParseFailure`/`IoFailure` are produced by the importer
+  step (`UiDesignerCommand.kt:181-199`) and never reach the placer, while the top
+  of the diagram already notes the `IOException`/parse branch. A reader tracing the
+  flow is told the wrong component owns both concerns.
+- Suggested fix: move `place empty chests, then ChestNamer.setName` up into the
+  `ScaffoldPlacer.place` block (above `PlacementResult`), and label the final arrow
+  as the command-level mapping of both the import step and `PlacementResult` onto
+  `ScaffoldOutcome`, so `ParseFailure`/`IoFailure` visibly come from
+  `JsonImporter`/`resolvePath`, not the placer.
+
+### Non-findings
+- **`place/` is the right package and the seams hold.** `ScaffoldPlacer` is the
+  only new Bukkit-coupled placement unit, takes `World`/anchor/view explicitly with
+  an injected `occupied: (Block) -> Boolean`, and its `Player` overload is a thin
+  adapter; `place/` depends on the pure `export/UiChest` and `naming/ChestNamer`,
+  never the reverse. No Bukkit type leaked into `export` or the command tree.
+- **`JsonImporter` keeps `export` pure.** It imports only
+  `kotlinx.serialization` and `java.nio.file`; the Bukkit-only `Material` check
+  enters as the injected `(String) -> Boolean` matcher with the production
+  implementation supplied by the command default, so the package's "pure Kotlin"
+  seam in `docs/architecture.md:68-70` is intact. The `materialMatcher` parameter is
+  a genuinely small earner (one caller, one injected test predicate), not
+  premature generalisation.
+- **`MaterialResolver`'s placement in `place/` is defensible.** It is a three-line
+  Bukkit translation, and `place/` is already the Bukkit side; putting it in
+  `export/` would break purity and in `commands/` would bury a reusable mapping in
+  the integration file. It only answers `isKnown`, but ticket 170 will need the
+  actual `Material` to build `ItemStack`s and can extend the same object with a
+  `resolve(id): Material?` without touching the reader seam — an extension, not a
+  rewrite.
+- **World-owns-layout holds.** `JsonImporter` returns `List<UiChest>` with
+  `position` left `null` (`@Transient`) and never computes coordinates; all physical
+  layout (row along the view, facing, `RIGHT`/`LEFT` pairing) lives in
+  `place/ScaffoldPlacer.layout`. The JSON format is untouched, matching
+  `docs/design.md:45` and the 170 ticket's dependence on the same split.
+- **`UiDesignerConfig.resolvePath` is cohesive; `jsonFiles()` is a mild but
+  acceptable role expansion.** `resolvePath` is just the public form of the
+  existing private `resolve` used by `outputFile`, so exposing it adds no new
+  concept. `jsonFiles()` reads the filesystem, which stretches "typed view over
+  config.yml", but it lists the data folder that config already owns and resolves
+  against, and it is the completion source 170's `status`/`sync` will reuse. A new
+  `DesignFiles` abstraction for a directory listing would not earn its keep; no
+  change needed.
+- **`UiDesignerCommand` is still the integration point, not the owner.** `scaffold`
+  orchestrates (resolve path → importer → placer → outcome) and owns only message
+  bodies, matching the existing `save`/`reload` shape; the injected
+  `(Path) -> List<UiChest>` importer and `(Player, List<UiChest>) -> PlacementResult`
+  placer keep the pipeline unit-testable without CommandAPI dispatch, and the
+  plugin wiring in `UiDesignerPlugin.onEnable` needs no new arguments because both
+  defaults are production. The only blemish is the duplicated resolve branch in
+  finding 1.
+- **Seams for 170 are present, nothing is over-generalised for it.** Ticket 170
+  can reuse `JsonImporter.read`, the injected matcher pattern, `resolvePath`, and
+  `jsonFiles` for `/uidesigner status [file]` and `/uidesigner sync [file]`;
+  scaffold's `ScaffoldPlacer` is correctly not reused there (sync writes into
+  existing chests). No scaffold-shaped abstraction was forced onto the sync path.
+- **Manual-test entries are complete and correctly attributed.** MT-013 covers the
+  live double/single placement, MT-014 the `scaffold` → `save` round trip, and
+  MT-015 the anchor/obstruction plus missing/malformed-file rejections; each names
+  ticket 160 and explains why MockBukkit cannot cover it, covering all
+  non-automatable acceptance criteria in `docs/tasks/160-scaffold.md:45-53`.
+- **`docs/design.md` records the decisions.** The new "Scaffold reads purely and
+  places thinly" entry (`docs/design.md:143-156`) states the pure-reader/matcher
+  seam, the 6→double vs other-rows→single approximation, the atomic pre-check, and
+  the non-idempotence deferral, consistent with the code and the ticket.
+- **`docs/data-format.md` needs no change.** It already documents `rows` 1..6,
+  required/unique names, and row/slot ranges; the importer enforces exactly those,
+  and the export-only `rows`-derives-from-3/6 sentence is not contradicted by the
+  read path's accepted range.
