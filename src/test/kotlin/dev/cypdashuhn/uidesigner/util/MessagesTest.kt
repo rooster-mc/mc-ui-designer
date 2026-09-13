@@ -1,7 +1,7 @@
 package dev.cypdashuhn.uidesigner.util
 
-import dev.cypdashuhn.uidesigner.commands.duplicateNamesMessage
 import dev.cypdashuhn.uidesigner.commands.helpMessage
+import dev.cypdashuhn.uidesigner.commands.invalidNamesMessage
 import dev.cypdashuhn.uidesigner.commands.invalidOutputFileMessage
 import dev.cypdashuhn.uidesigner.commands.namedMessage
 import dev.cypdashuhn.uidesigner.commands.noChestsMessage
@@ -13,10 +13,10 @@ import dev.cypdashuhn.uidesigner.commands.reloadInvalidOutputMessage
 import dev.cypdashuhn.uidesigner.commands.reloadSuccessMessage
 import dev.cypdashuhn.uidesigner.commands.reloadUsingDefaultsMessage
 import dev.cypdashuhn.uidesigner.commands.saveSuccessMessage
-import dev.cypdashuhn.uidesigner.commands.unnamedChestsMessage
 import dev.cypdashuhn.uidesigner.commands.usageMessage
 import dev.cypdashuhn.uidesigner.commands.writeFailedMessage
 import dev.cypdashuhn.uidesigner.export.DuplicateNameGroup
+import dev.cypdashuhn.uidesigner.export.NamedPosition
 import dev.rooster.region.BlockPos
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
@@ -74,12 +74,9 @@ class MessagesTest {
         assertEquals(NamedTextColor.RED, reloadFailedMessage("bad config").color())
         assertEquals(NamedTextColor.RED, noTargetMessage().color())
         assertEquals(NamedTextColor.RED, notAChestMessage().color())
-        assertEquals(NamedTextColor.RED, unnamedChestsMessage(listOf(BlockPos(0, 0, 0))).color())
         assertEquals(
             NamedTextColor.RED,
-            duplicateNamesMessage(
-                listOf(DuplicateNameGroup("Shop", listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0))))
-            ).color(),
+            invalidNamesMessage(listOf(BlockPos(0, 0, 0)), emptyList()).color(),
         )
     }
 
@@ -163,9 +160,14 @@ class MessagesTest {
     }
 
     @Test
-    fun `unnamed chests message lists the positions`() {
+    fun `invalid names message lists unnamed positions`() {
         val text =
-            plain(unnamedChestsMessage(listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0))))
+            plain(
+                invalidNamesMessage(
+                    unnamed = listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0)),
+                    duplicates = emptyList(),
+                )
+            )
 
         assertTrue(text.contains("2 chests have no name"))
         assertTrue(text.contains("(0, 0, 0)"))
@@ -174,23 +176,61 @@ class MessagesTest {
     }
 
     @Test
-    fun `unnamed chests message uses the singular`() {
-        assertTrue(plain(unnamedChestsMessage(listOf(BlockPos(0, 0, 0)))).contains("1 chest has"))
+    fun `invalid names message uses the singular for one unnamed chest`() {
+        val text =
+            plain(
+                invalidNamesMessage(unnamed = listOf(BlockPos(0, 0, 0)), duplicates = emptyList())
+            )
+
+        assertTrue(text.contains("1 chest has no name"))
+        assertTrue(text.contains("Name it with"))
     }
 
     @Test
-    fun `duplicate names message reports the name and positions`() {
+    fun `invalid names message explains case and whitespace duplicates`() {
         val text =
             plain(
-                duplicateNamesMessage(
-                    listOf(DuplicateNameGroup("Shop", listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0))))
+                invalidNamesMessage(
+                    unnamed = emptyList(),
+                    duplicates =
+                        listOf(
+                            DuplicateNameGroup(
+                                listOf(
+                                    NamedPosition("Shop", BlockPos(0, 0, 0)),
+                                    NamedPosition("SHOP", BlockPos(2, 0, 0)),
+                                )
+                            )
+                        ),
                 )
             )
 
-        assertTrue(text.contains("\"Shop\""))
-        assertTrue(text.contains("(0, 0, 0)"))
-        assertTrue(text.contains("(2, 0, 0)"))
-        assertTrue(text.contains("unique"))
+        assertTrue(text.contains("compared ignoring case and surrounding spaces"))
+        assertTrue(text.contains("\"Shop\" at (0, 0, 0)"))
+        assertTrue(text.contains("\"SHOP\" at (2, 0, 0)"))
+    }
+
+    @Test
+    fun `invalid names message reports unnamed and duplicates together`() {
+        val text =
+            plain(
+                invalidNamesMessage(
+                    unnamed = listOf(BlockPos(4, 0, 0)),
+                    duplicates =
+                        listOf(
+                            DuplicateNameGroup(
+                                listOf(
+                                    NamedPosition("Shop", BlockPos(0, 0, 0)),
+                                    NamedPosition("shop", BlockPos(2, 0, 0)),
+                                )
+                            )
+                        ),
+                )
+            )
+
+        assertTrue(text.contains("no name"))
+        assertTrue(text.contains("(4, 0, 0)"))
+        assertTrue(text.contains("must be unique"))
+        assertTrue(text.contains("\"shop\" at (2, 0, 0)"))
     }
 
     private fun allMessages(): List<Pair<String, Component>> =
@@ -210,10 +250,18 @@ class MessagesTest {
             "reloadFailed" to reloadFailedMessage("bad config"),
             "reloadFailedFallback" to reloadFailedMessage(null),
             "chestEditNamed" to namedMessage("Shop"),
-            "chestEditUnnamed" to unnamedChestsMessage(listOf(BlockPos(0, 0, 0))),
-            "chestEditDuplicate" to
-                duplicateNamesMessage(
-                    listOf(DuplicateNameGroup("Shop", listOf(BlockPos(0, 0, 0))))
+            "saveUnnamed" to invalidNamesMessage(listOf(BlockPos(0, 0, 0)), emptyList()),
+            "saveDuplicate" to
+                invalidNamesMessage(
+                    emptyList(),
+                    listOf(
+                        DuplicateNameGroup(
+                            listOf(
+                                NamedPosition("Shop", BlockPos(0, 0, 0)),
+                                NamedPosition("shop", BlockPos(2, 0, 0)),
+                            )
+                        )
+                    ),
                 ),
             "chestEditNoTarget" to noTargetMessage(),
             "chestEditNotAChest" to notAChestMessage(),

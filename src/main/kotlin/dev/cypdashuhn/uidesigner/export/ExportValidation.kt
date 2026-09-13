@@ -2,9 +2,13 @@ package dev.cypdashuhn.uidesigner.export
 
 import dev.rooster.region.BlockPos
 
-data class DuplicateNameGroup(
+data class NamedPosition(
     val name: String,
-    val positions: List<BlockPos>,
+    val position: BlockPos,
+)
+
+data class DuplicateNameGroup(
+    val entries: List<NamedPosition>,
 )
 
 data class ExportValidation(
@@ -24,8 +28,7 @@ fun validateForExport(chests: List<UiChest>): ExportValidation {
             .filter { it.size > 1 }
             .map { group ->
                 DuplicateNameGroup(
-                    name = group.first().name,
-                    positions = group.map { it.requiredPosition() },
+                    group.map { NamedPosition(it.name, it.requiredPosition()) }
                 )
             }
     return ExportValidation(unnamed, duplicates)

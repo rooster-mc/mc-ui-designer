@@ -48,11 +48,8 @@ class UiDesignerCommand(
             val clipped: List<ClippedHalf>,
         ) : SaveOutcome
 
-        data class UnnamedChests(
-            val positions: List<BlockPos>,
-        ) : SaveOutcome
-
-        data class DuplicateNames(
+        data class InvalidNames(
+            val unnamed: List<BlockPos>,
             val duplicates: List<DuplicateNameGroup>,
         ) : SaveOutcome
 
@@ -105,11 +102,8 @@ class UiDesignerCommand(
                 chest.copy(name = name)
             }
         val validation = validateForExport(named)
-        if (validation.unnamed.isNotEmpty()) {
-            return SaveOutcome.UnnamedChests(validation.unnamed)
-        }
-        if (validation.duplicates.isNotEmpty()) {
-            return SaveOutcome.DuplicateNames(validation.duplicates)
+        if (!validation.isValid) {
+            return SaveOutcome.InvalidNames(validation.unnamed, validation.duplicates)
         }
         val outputFile =
             try {
@@ -148,8 +142,7 @@ class UiDesignerCommand(
             SaveOutcome.NoChests -> noChestsMessage()
             is SaveOutcome.WriteFailed -> writeFailedMessage(outcome.outputFile, outcome.reason)
             is SaveOutcome.ClippedChests -> clippedChestsMessage(outcome.clipped)
-            is SaveOutcome.UnnamedChests -> unnamedChestsMessage(outcome.positions)
-            is SaveOutcome.DuplicateNames -> duplicateNamesMessage(outcome.duplicates)
+            is SaveOutcome.InvalidNames -> invalidNamesMessage(outcome.unnamed, outcome.duplicates)
             is SaveOutcome.InvalidOutputFile -> invalidOutputFileMessage(outcome.reason)
         }
 
@@ -219,26 +212,31 @@ internal fun clippedChestsMessage(clipped: List<ClippedHalf>): Component {
 
 private fun BlockPos.coords(): String = "($x, $y, $z)"
 
-internal fun unnamedChestsMessage(positions: List<BlockPos>): Component {
+internal fun invalidNamesMessage(
+    unnamed: List<BlockPos>,
+    duplicates: List<DuplicateNameGroup>,
+): Component {
+    val body = listOfNotNull(unnamedClause(unnamed), duplicateClause(duplicates)).joinToString(" ")
+    return Messages.styled(Messages.errorColor, "Cannot export: $body")
+}
+
+private fun unnamedClause(positions: List<BlockPos>): String? {
+    if (positions.isEmpty()) return null
     val count = positions.size
     val subject = if (count == 1) "1 chest has" else "$count chests have"
     val pronoun = if (count == 1) "it" else "them"
     val listed = positions.joinToString(", ") { it.coords() }
-    return Messages.styled(
-        Messages.errorColor,
-        "Cannot export: $subject no name. Name $pronoun with /chest-edit <name>: $listed.",
-    )
+    return "$subject no name. Name $pronoun with /chest-edit <name>: $listed."
 }
 
-internal fun duplicateNamesMessage(duplicates: List<DuplicateNameGroup>): Component {
+private fun duplicateClause(duplicates: List<DuplicateNameGroup>): String? {
+    if (duplicates.isEmpty()) return null
     val listed =
         duplicates.joinToString("; ") { group ->
-            "\"${group.name}\" at ${group.positions.joinToString(", ") { it.coords() }}"
+            group.entries.joinToString(", ") { "\"${it.name}\" at ${it.position.coords()}" }
         }
-    return Messages.styled(
-        Messages.errorColor,
-        "Cannot export: chest names must be unique. Duplicates: $listed.",
-    )
+    return "Chest names must be unique (compared ignoring case and surrounding spaces). " +
+        "Duplicates: $listed."
 }
 
 internal fun writeFailedMessage(outputFile: Path?, reason: String?): Component {

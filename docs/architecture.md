@@ -142,12 +142,14 @@ uidesigner/
   missing name back to `""`), and `JsonExporter` remains the ordering authority.
 - **`validateForExport(chests)` is the name gate (150).** It lives in the pure
   `export` package and returns an `ExportValidation` carrying the positions of
-  unnamed chests and the `DuplicateNameGroup`s. A name is blank when it trims to
-  empty; names are grouped by `trim().lowercase()` and the group keeps the first
-  spelling's original casing. `UiDesignerCommand` runs it on the named, grouped
-  chests before resolving the output path, returning `UnnamedChests` or
-  `DuplicateNames` (no export) on failure. `JsonExporter` no longer strips blank
-  chest names; slot-name blank-stripping is unchanged.
+  unnamed chests and the `DuplicateNameGroup`s, where each group lists every
+  `NamedPosition` (original spelling + position) that normalised to the same key.
+  A name is blank when it trims to empty; names are grouped by
+  `trim().lowercase()`. `UiDesignerCommand` runs it on the named, grouped chests
+  before resolving the output path and returns a single `InvalidNames` outcome
+  (no export) carrying both lists, so an unnamed-and-duplicate selection is
+  reported in one message. `JsonExporter` no longer strips blank chest names;
+  slot-name blank-stripping is unchanged.
 - **Chest predicate duplication.** `ChestScanner` and `ChestNamer` each define
   their own chest-material check (`CHEST`/`TRAPPED_CHEST` plus
   `Tag.COPPER_CHESTS`, whose eight variants are also `Chest`/`ChestData` on this
@@ -175,8 +177,8 @@ uidesigner/
   no custom suggestion list); a blank or whitespace-only argument prints the
   usage line and leaves the chest untouched, while `clear` is stored as an
   ordinary name. `save` validates the named, grouped chests with
-  `validateForExport` and maps failures to `UnnamedChests`/`DuplicateNames`
-  before touching the output path. `reloadConfiguration()` returns a
+  `validateForExport` and maps any failure to `InvalidNames` before touching the
+  output path. `reloadConfiguration()` returns a
   `ReloadResult`, which `UiDesignerCommand` maps to its `ReloadOutcome`
   (reloaded, defaults, invalid output, or failed).
 - **`JsonExporter`** is the single ordering authority: it sorts chests by
@@ -202,7 +204,7 @@ player + FAWE selection
         │                     else ChestNamer.nameOf at each canonical position
         ▼
   List<UiChest>               (names populated)
-        │  validateForExport -> UnnamedChests / DuplicateNames (no export)
+        │  validateForExport -> InvalidNames (no export)
         ▼
   List<UiChest>               (named and unique)
         │  JsonExporter

@@ -6,6 +6,7 @@ import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
 import dev.cypdashuhn.uidesigner.export.DesignJson
 import dev.cypdashuhn.uidesigner.export.DuplicateNameGroup
 import dev.cypdashuhn.uidesigner.export.JsonExporter
+import dev.cypdashuhn.uidesigner.export.NamedPosition
 import dev.cypdashuhn.uidesigner.export.UiChest
 import dev.cypdashuhn.uidesigner.naming.ChestNamer
 import dev.jorel.commandapi.CommandAPITestUtilities
@@ -137,7 +138,10 @@ class UiDesignerCommandTest {
             ).save(player)
 
         assertEquals(
-            UiDesignerCommand.SaveOutcome.UnnamedChests(listOf(BlockPos(2, 0, 0))),
+            UiDesignerCommand.SaveOutcome.InvalidNames(
+                unnamed = listOf(BlockPos(2, 0, 0)),
+                duplicates = emptyList(),
+            ),
             outcome,
         )
         assertEquals(0, exporterCalls)
@@ -163,13 +167,53 @@ class UiDesignerCommandTest {
             ).save(player)
 
         assertEquals(
-            UiDesignerCommand.SaveOutcome.DuplicateNames(
-                listOf(
-                    DuplicateNameGroup(
-                        name = "Shop",
-                        positions = listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0)),
-                    )
-                )
+            UiDesignerCommand.SaveOutcome.InvalidNames(
+                unnamed = emptyList(),
+                duplicates =
+                    listOf(
+                        DuplicateNameGroup(
+                            listOf(
+                                NamedPosition("Shop", BlockPos(0, 0, 0)),
+                                NamedPosition("  shop  ", BlockPos(2, 0, 0)),
+                            )
+                        )
+                    ),
+            ),
+            outcome,
+        )
+        assertEquals(0, exporterCalls)
+        assertFalse(Files.exists(output))
+    }
+
+    @Test
+    fun `save reports unnamed and duplicate names in one outcome`(
+        @TempDir directory: Path
+    ) {
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
+        ChestNamer.setName(blockAt(Material.CHEST, 2, 0, 0), "shop")
+        blockAt(Material.CHEST, 4, 0, 0)
+        var exporterCalls = 0
+        val output = directory.resolve("design.json")
+
+        val outcome =
+            unregisteredCommand(
+                region = region(0, 0, 0, 4, 0, 0),
+                outputFile = output,
+                exporter = { _, _ -> exporterCalls++ },
+            ).save(player)
+
+        assertEquals(
+            UiDesignerCommand.SaveOutcome.InvalidNames(
+                unnamed = listOf(BlockPos(4, 0, 0)),
+                duplicates =
+                    listOf(
+                        DuplicateNameGroup(
+                            listOf(
+                                NamedPosition("Shop", BlockPos(0, 0, 0)),
+                                NamedPosition("shop", BlockPos(2, 0, 0)),
+                            )
+                        )
+                    ),
             ),
             outcome,
         )
@@ -433,6 +477,59 @@ class UiDesignerCommandTest {
     }
 
     @Test
+    fun `save never resolves the output path when a chest is unnamed`() {
+        blockAt(Material.CHEST, 2, 0, 0)
+        val command =
+            UiDesignerCommand(
+                plugin = MockBukkit.createMockPlugin(),
+                selectionProvider = { region(0, 0, 0, 2, 0, 0) },
+                configProvider = { throw IllegalStateException("config should not be read") },
+                reloadAction = { ReloadResult.Reloaded },
+            )
+
+        val outcome = command.save(player)
+
+        assertEquals(
+            UiDesignerCommand.SaveOutcome.InvalidNames(
+                unnamed = listOf(BlockPos(2, 0, 0)),
+                duplicates = emptyList(),
+            ),
+            outcome,
+        )
+    }
+
+    @Test
+    fun `save never resolves the output path when names collide`() {
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
+        ChestNamer.setName(blockAt(Material.CHEST, 2, 0, 0), "shop")
+        val command =
+            UiDesignerCommand(
+                plugin = MockBukkit.createMockPlugin(),
+                selectionProvider = { region(0, 0, 0, 2, 0, 0) },
+                configProvider = { throw IllegalStateException("config should not be read") },
+                reloadAction = { ReloadResult.Reloaded },
+            )
+
+        val outcome = command.save(player)
+
+        assertEquals(
+            UiDesignerCommand.SaveOutcome.InvalidNames(
+                unnamed = emptyList(),
+                duplicates =
+                    listOf(
+                        DuplicateNameGroup(
+                            listOf(
+                                NamedPosition("Shop", BlockPos(0, 0, 0)),
+                                NamedPosition("shop", BlockPos(2, 0, 0)),
+                            )
+                        )
+                    ),
+            ),
+            outcome,
+        )
+    }
+
+    @Test
     fun `reload runs the injected reload then reads the config`(
         @TempDir directory: Path
     ) {
@@ -556,7 +653,8 @@ class UiDesignerCommandTest {
         CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner save")
 
         val message = plainMessage()
-        assertTrue(message.contains("Shop"))
+        assertTrue(message.contains("\"Shop\""))
+        assertTrue(message.contains("\"shop\""))
         assertTrue(message.contains("(0, 0, 0)"))
         assertTrue(message.contains("(2, 0, 0)"))
         assertFalse(exported)

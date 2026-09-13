@@ -92,7 +92,7 @@ class JsonExporterTest {
     }
 
     @Test
-    fun `a blank chest name is preserved as an empty name`() {
+    fun `a blank chest name is preserved verbatim`() {
         val chests =
             listOf(
                 chest(

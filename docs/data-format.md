@@ -72,9 +72,10 @@ data class BlockPos(val x: Int, val y: Int, val z: Int) : Comparable<BlockPos>
 `position` is `@Transient` (never serialized): it carries the canonical block
 position so the exporter can order chests, and it is `null` by default so a
 missing position fails fast (`requireNotNull`) instead of silently falling back
-to input order. `name` is required; the exporter validates that every name is
-non-blank and unique (trimmed, case-insensitive) before writing and fails closed
-otherwise.
+to input order. `name` is required: the save command calls `validateForExport`
+and refuses to invoke the exporter unless every name is non-blank and unique
+(trimmed, case-insensitive), so no file is written otherwise. `JsonExporter`
+itself only orders entries and strips blank *slot* names.
 
 ## Delta from the draft
 

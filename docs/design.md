@@ -124,10 +124,12 @@ Out of scope (backlog):
   `/chest-edit`; every one maps to `Chest`/`ChestData` and can form a double.
 - **Names are the identity.** Every exported chest must have a non-blank name,
   unique across the file (surrounding whitespace ignored, comparison
-  case-insensitive, original casing preserved). The exporter fails closed and
-  writes no file, listing unnamed chest positions and duplicate name+positions.
-  `UiChest.name` is non-null. This makes each entry referenceable by the
-  importer, which joins world chests to file entries by name.
+  case-insensitive, original casing preserved). The save path validates names
+  with `validateForExport` and fails closed before invoking the exporter,
+  writing no file and listing unnamed chest positions and duplicate
+  spellings+positions. `UiChest.name` is non-null. This makes each entry
+  referenceable by the importer, which joins world chests to file entries by
+  name.
 - **`/chest-edit clear` is removed.** Names are mandatory, so clearing only
   produced an unsavable chest. `clear` is now an ordinary name and blank input
   is rejected; this also drops the reserved-word sentinel from the command tree.

@@ -37,8 +37,11 @@ class ExportValidationTest {
         assertEquals(
             listOf(
                 DuplicateNameGroup(
-                    name = "Shop",
-                    positions = listOf(BlockPos(0, 0, 0), BlockPos(1, 0, 0), BlockPos(2, 0, 0)),
+                    listOf(
+                        NamedPosition("Shop", BlockPos(0, 0, 0)),
+                        NamedPosition("shop", BlockPos(1, 0, 0)),
+                        NamedPosition("SHOP", BlockPos(2, 0, 0)),
+                    )
                 )
             ),
             validation.duplicates,
@@ -59,8 +62,10 @@ class ExportValidationTest {
         assertEquals(
             listOf(
                 DuplicateNameGroup(
-                    name = " Shop ",
-                    positions = listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0)),
+                    listOf(
+                        NamedPosition(" Shop ", BlockPos(0, 0, 0)),
+                        NamedPosition("Shop", BlockPos(2, 0, 0)),
+                    )
                 )
             ),
             validation.duplicates,
@@ -83,7 +88,7 @@ class ExportValidationTest {
     }
 
     @Test
-    fun `duplicate groups keep first-seen order across names`() {
+    fun `duplicate groups keep first-seen order and each colliding spelling`() {
         val validation =
             validateForExport(
                 listOf(
@@ -94,14 +99,19 @@ class ExportValidationTest {
                 ),
             )
 
-        assertEquals(listOf("Shop", "Bank"), validation.duplicates.map { it.name })
         assertEquals(
-            listOf(BlockPos(0, 0, 0), BlockPos(2, 0, 0)),
-            validation.duplicates[0].positions,
+            listOf(
+                NamedPosition("Shop", BlockPos(0, 0, 0)),
+                NamedPosition("shop", BlockPos(2, 0, 0)),
+            ),
+            validation.duplicates[0].entries,
         )
         assertEquals(
-            listOf(BlockPos(1, 0, 0), BlockPos(3, 0, 0)),
-            validation.duplicates[1].positions,
+            listOf(
+                NamedPosition("Bank", BlockPos(1, 0, 0)),
+                NamedPosition("bank", BlockPos(3, 0, 0)),
+            ),
+            validation.duplicates[1].entries,
         )
     }
 
