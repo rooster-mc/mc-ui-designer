@@ -32,7 +32,6 @@ import net.kyori.adventure.text.Component
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import java.io.IOException
-import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
 class UiDesignerCommand(
@@ -196,10 +195,8 @@ class UiDesignerCommand(
         val chests =
             try {
                 importer(file)
-            } catch (e: NoSuchFileException) {
-                return ScaffoldOutcome.IoFailure(file, null)
             } catch (e: IOException) {
-                return ScaffoldOutcome.IoFailure(file, e.message)
+                return ScaffoldOutcome.IoFailure(file, reasonWithoutPath(e.message, file))
             } catch (e: InvalidDesignException) {
                 return ScaffoldOutcome.ParseFailure(file, e.detail)
             } catch (e: SerializationException) {
@@ -319,6 +316,13 @@ internal fun clippedChestsMessage(clipped: List<ClippedHalf>): Component {
 
 private fun BlockPos.coords(): String = "($x, $y, $z)"
 
+private fun reasonWithoutPath(reason: String?, file: Path): String? =
+    reason
+        ?.removePrefix(file.toString())
+        ?.removePrefix(":")
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+
 internal fun invalidNamesMessage(
     unnamed: List<BlockPos>,
     duplicates: List<DuplicateNameGroup>,
@@ -393,7 +397,7 @@ internal fun scaffoldNoTargetMessage(): Component =
     Messages.styled(
         Messages.errorColor,
         "Cannot scaffold: no world or usable target block. Aim at open space to place " +
-            "in front of you.",
+            "the row in front of you.",
     )
 
 internal fun scaffoldParseFailureMessage(file: Path, reason: String?): Component {

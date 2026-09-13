@@ -163,16 +163,20 @@ uidesigner/
   `InvalidDesignException` naming the file and the entry (index, name, row,
   slot). An empty design is rejected up front ("the design contains no
   chests"), so a zero-entry file can never reach the placer and report a green
-  no-op. `InvalidDesignException` is not a `Path`-only concern, so the reader
-  never names a Bukkit type. The production matcher is
+  no-op. `InvalidDesignException` carries only `Path`/`String` fields, so the
+  reader names no Bukkit type even though it validates item ids through the
+  injected matcher. The production matcher is
   `place/MaterialResolver.isKnown` (`Material.matchMaterial(id) != null`); the
   command injects it as the reader default, and tests pass a set predicate. IO
-  failures surface as the underlying `IOException` (a missing file is
-  `NoSuchFileException`), so the command can separate them from parse failures.
-  `InvalidDesignException` carries `file` and `detail` separately; the command
-  renders the resolved file once with the detail, and translates a kotlinx
-  `SerializationException` to a fixed "not valid JSON" phrase rather than
-  echoing parser offsets.
+  failures surface as the underlying `IOException`, so the command can separate
+  them from parse failures. A path-only IO reason (a missing file's
+  `NoSuchFileException`, an unreadable file's `AccessDeniedException`, a
+  directory read) is normalised by stripping the resolved path, so the command
+  renders the file once and falls back to the "exists and is readable" hint;
+  other reasons survive. `InvalidDesignException` carries `file` and `detail`
+  separately; the command renders the resolved file once with the detail, and
+  translates a kotlinx `SerializationException` to a fixed "not valid JSON"
+  phrase rather than echoing parser offsets.
 - **`place/ScaffoldPlacer` owns layout and the atomic pre-check (160).** It takes
   a `World`, `List<UiChest>`, anchor `BlockPos`, view `BlockFace`, and an
   `occupied: (Block) -> Boolean` predicate (default `{ false }`). The row runs
@@ -279,7 +283,7 @@ Scaffold is the reverse direction:
         Path (blank/absent uses config.outputFile)
         │  JsonImporter.read(path, MaterialResolver.isKnown)
         │    InvalidDesignException / SerializationException -> ParseFailure (no placement)
-        │    NoSuchFileException / IOException -> IoFailure (no placement)
+        │    IOException (path-only reason -> the readable-file hint) -> IoFailure (no placement)
         ▼
   List<UiChest>               (validated: non-empty, rows 1..6, rows/slots, items, names)
         │  ScaffoldPlacer.place(player, chests)

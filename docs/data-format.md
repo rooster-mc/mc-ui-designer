@@ -48,6 +48,8 @@ used mixed casing, so it was normalised.
   unique in practice.
 - `rows` derives from the physical chest: single chest inventories have 27
   slots (3 rows), double chests have 54 (6 rows).
+- The array must contain at least one chest. An empty design (`[]`) is rejected
+  when read (naming the file), so `scaffold` never reports a green no-op.
 
 ## Kotlin model
 

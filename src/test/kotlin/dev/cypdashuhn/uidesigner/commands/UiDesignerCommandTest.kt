@@ -42,6 +42,8 @@ import org.mockbukkit.mockbukkit.block.data.ChestDataMock
 import org.mockbukkit.mockbukkit.entity.PlayerMock
 import org.mockbukkit.mockbukkit.world.WorldMock
 import java.io.IOException
+import java.nio.file.AccessDeniedException
+import java.nio.file.FileSystemException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -1029,13 +1031,48 @@ class UiDesignerCommandTest {
     fun `scaffold reports a missing file without duplicating the path`() {
         val command =
             unregisteredCommand(
-                importer = { throw NoSuchFileException("/tmp/design.json") },
+                importer = { throw NoSuchFileException(DEFAULT_OUTPUT.toString()) },
                 placer = { _, _ -> PlacementResult.Placed(0) },
             )
 
         val outcome = command.scaffold(player, null)
 
         assertEquals(UiDesignerCommand.ScaffoldOutcome.IoFailure(DEFAULT_OUTPUT, null), outcome)
+    }
+
+    @Test
+    fun `scaffold reports an unreadable file without duplicating the path`() {
+        val command =
+            unregisteredCommand(
+                importer = { throw AccessDeniedException(DEFAULT_OUTPUT.toString()) },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(UiDesignerCommand.ScaffoldOutcome.IoFailure(DEFAULT_OUTPUT, null), outcome)
+    }
+
+    @Test
+    fun `scaffold keeps a non-path IO reason without repeating the file`() {
+        val command =
+            unregisteredCommand(
+                importer = {
+                    throw FileSystemException(
+                        DEFAULT_OUTPUT.toString(),
+                        null,
+                        "Is a directory"
+                    )
+                },
+                placer = { _, _ -> PlacementResult.Placed(0) },
+            )
+
+        val outcome = command.scaffold(player, null)
+
+        assertEquals(
+            UiDesignerCommand.ScaffoldOutcome.IoFailure(DEFAULT_OUTPUT, "Is a directory"),
+            outcome,
+        )
     }
 
     @Test
