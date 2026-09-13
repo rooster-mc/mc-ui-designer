@@ -31,11 +31,13 @@ uidesigner/
     JsonExporter.kt          UiChest -> JSON string/file (atomic write; single ordering authority)
     JsonImporter.kt          JSON file -> List<UiChest> + schema validation (pure, no Bukkit)
     ExportValidation.kt      pure name validation: unnamed positions, duplicate groups
+    Reconcile.kt             pure file-vs-world classification (InSync/Updated/Missing/Orphan/Unjoinable)
   place/
     MaterialResolver.kt      item id -> Boolean (reader's injected matcher; production = Material.matchMaterial != null)
     ScaffoldPlacer.kt        UiChest list + anchor -> placed chest blocks (atomic pre-check)
+    ChestSyncer.kt           ReconcileReport -> world writes (inventory + item names + chest names)
   commands/
-    UiDesignerCommand.kt     /uidesigner save | scaffold | reload | help (+ its message bodies)
+    UiDesignerCommand.kt     /uidesigner save | scaffold | status | sync | reload | help (+ its message bodies)
     ChestEditCommand.kt      /chest-edit <name> (+ its message bodies)
   util/
     Messages.kt              shared chat styling primitives (prefix, palette, styled)
@@ -211,24 +213,49 @@ uidesigner/
   `Tag.COPPER_CHESTS`, whose eight variants are also `Chest`/`ChestData` on this
   Paper version); this is a deliberate carry-over until a third consumer appears,
   then extract one shared `isChest`.
+- **`export/Reconcile` classifies purely; `place/ChestSyncer` writes (170).**
+  `Reconcile.reconcile(file, world)` takes two `List<UiChest>` (world chests
+  carry their canonical `position`, file chests do not) and returns a
+  `ReconcileReport` of `ChestStatus`es: `InSync`, `Updated` (carrying a
+  `ChestDrift` of `rowsDiffer`, `nameDiffer`, and `SlotDifference`s), `Missing`
+  (file-only), `Orphan` (world-only), `Unjoinable` (unnamed or duplicated world
+  name). The join key is `trim().lowercase()`; content comparison normalises to
+  `(row, slot) -> (item, name)` with blank names treated as absent, so slot
+  order and empty slots never register. `ChestStatus.InSync`/`Updated` keep the
+  matched pair so the renderer and applier need no second lookup; `Orphan` and
+  `Unjoinable` keep the world chest only. `ChestSyncer.apply(region, report,
+  materialOf)` consumes `report.matched`: it names the block via
+  `ChestNamer.setName` and, unless `drift.rowsDiffer`, replaces the inventory
+  contents (full-size `Array<ItemStack?>` from the file's rows/slots, which is
+  what clears removed slots); `materialOf` is injected and defaults to
+  `Material.matchMaterial`. For a double it uses the canonical block's
+  `Chest.inventory` (the shared 54-slot holder inventory) exactly as the grouper
+  reads it; an unlinked/geometry-only double reports `inventory.size` 27 and the
+  contents are skipped (MockBukkit cannot form a real `DoubleChest`, so this is
+  a manual-test entry). A `rowsDiffer` chest writes the name but skips contents
+  and is counted in `SyncResult.contentsSkipped`, so sync never resizes,
+  creates, or moves a chest. Orphans are never in `report.matched`, so sync
+  cannot touch them.
 - **`UiDesignerCommand`** is the integration point for `/uidesigner save |
-  scaffold | reload | help`. It composes `ChestCapture`, `DoubleChestGrouper`,
-  `ChestNamer`, and `JsonExporter` without owning their logic, and injects a
+  scaffold | status | sync | reload | help`. It composes `ChestCapture`,
+  `DoubleChestGrouper`, `ChestNamer`, and `JsonExporter` without owning their
+  logic, and injects a
   `(Player) -> Region?` selection provider, a `() -> UiDesignerConfig`
   provider, a reload action, an exporter function, a
-  `(Path) -> List<UiChest>` importer, and a
-  `(Player, List<UiChest>) -> PlacementResult` placer, so the pipeline is
+  `(Path) -> List<UiChest>` importer,
+  a `(Player, List<UiChest>) -> PlacementResult` placer, and a
+  `(Region, ReconcileReport) -> SyncResult` syncer, so the pipeline is
   unit-testable without CommandAPI dispatch. `save` runs on the main thread;
   file IO stays synchronous for the MVP. This is a local tool, so there are no
-  permission checks: `save` and `scaffold` are player-only (a non-player sender
-  is silently ignored), while `reload`, `help`, and the bare root accept any
-  sender (console included). Both commands are built with the `rooster-commands`
-  DSL (`literal`/`greedyString` nodes compiled to CommandAPI `CommandTree`s by
-  the library's `command-api` backend); `Messages` owns the shared styling
-  primitives (prefix, colour palette, `styled`), while each command file owns
-  its own message bodies as internal top-level functions, kept testable from
-  the same module. The bare-command behaviour of both roots is a root
-  `onExecute { ... }` on the `command(...)` scope, so no direct
+  permission checks: `save`, `scaffold`, `status`, and `sync` are player-only (a
+  non-player sender is silently ignored), while `reload`, `help`, and the bare
+  root accept any sender (console included). Both commands are built with the
+  `rooster-commands` DSL (`literal`/`greedyString` nodes compiled to CommandAPI
+  `CommandTree`s by the library's `command-api` backend); `Messages` owns the
+  shared styling primitives (prefix, colour palette, `styled`), while each
+  command file owns its own message bodies as internal top-level functions, kept
+  testable from the same module. The bare-command behaviour of both roots is a
+  root `onExecute { ... }` on the `command(...)` scope, so no direct
   `CommandTree.executes` remains: `/uidesigner` prints help for any sender,
   `/chest-edit` prints usage for a player and stays a silent no-op for console.
   `/chest-edit` has a single optional greedy `name` node (no `clear` literal and
@@ -240,7 +267,14 @@ uidesigner/
   optional greedy `file` child whose suggestion list is the data folder's
   `.json` files; it maps `PlacementResult`/import failures onto its
   `ScaffoldOutcome` set (`Placed`, `NoTarget`, `ParseFailure`, `Obstructed`,
-  `IoFailure`). `reloadConfiguration()` returns a `ReloadResult`, which
+  `IoFailure`). `status` and `sync` share the same optional greedy `file` node
+  and the same `readDesign` helper as `scaffold` (so a missing/unreadable file,
+  malformed JSON, and an invalid design are reported identically), then capture
+  the named, grouped world chests through one `capture` helper shared with
+  `save`. `status` maps to `StatusOutcome` (`Reported`, the same failure set,
+  plus `NoSelection`/`NoChests`/`ClippedChests`) and writes nothing; `sync`
+  maps to `SyncOutcome.Synced` after invoking the injected syncer.
+  `reloadConfiguration()` returns a `ReloadResult`, which
   `UiDesignerCommand` maps to its `ReloadOutcome` (reloaded, defaults, invalid
   output, or failed).
 - **`JsonExporter`** is the single ordering authority: it sorts chests by
@@ -296,6 +330,29 @@ Scaffold is the reverse direction:
         │  UiDesignerCommand maps import failures and PlacementResult
         ▼
         ScaffoldOutcome (Placed | NoTarget | ParseFailure | Obstructed | IoFailure)
+```
+
+Status and sync reuse the file read and the capture, then reconcile file against
+world:
+
+```
+  file argument (or config.outputFile)
+        │  UiDesignerCommand.readDesign -> resolvePath -> JsonImporter.read
+        ▼
+  List<UiChest>               (validated; failures -> ParseFailure/IoFailure)
+        │
+        │  UiDesignerCommand.capture (shared with save)
+        ▼
+  Region + List<UiChest>      (world chests, names populated; clipped -> ClippedChests)
+        │  Reconcile.reconcile(file, world)
+        ▼
+  ReconcileReport             (InSync | Updated(drift) | Missing | Orphan | Unjoinable)
+        │  status: render only, write nothing
+        │  sync:   ChestSyncer.apply(region, report)
+        │            matched non-rows-drift -> ChestNamer.setName + full inventory write
+        │            matched rows-drift     -> ChestNamer.setName only (contents skipped)
+        ▼
+  StatusOutcome.Reported | SyncOutcome.Synced(applied, contentsSkipped)
 ```
 
 ## Conventions

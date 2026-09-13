@@ -3,6 +3,7 @@ package dev.cypdashuhn.uidesigner.commands
 import dev.cypdashuhn.uidesigner.capture.ClippedHalf
 import dev.cypdashuhn.uidesigner.config.ReloadResult
 import dev.cypdashuhn.uidesigner.config.UiDesignerConfig
+import dev.cypdashuhn.uidesigner.export.ChestStatus
 import dev.cypdashuhn.uidesigner.export.DesignJson
 import dev.cypdashuhn.uidesigner.export.DuplicateNameGroup
 import dev.cypdashuhn.uidesigner.export.InvalidDesignException
@@ -32,6 +33,8 @@ import org.bukkit.plugin.java.JavaPlugin
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -791,6 +794,8 @@ class UiDesignerCommandTest {
         val message = plainMessage()
         assertTrue(message.contains("save"))
         assertTrue(message.contains("scaffold"))
+        assertTrue(message.contains("status"))
+        assertTrue(message.contains("sync"))
         assertTrue(message.contains("reload"))
         assertTrue(message.contains("help"))
         assertTrue(message.contains("chest-edit"))
@@ -836,6 +841,8 @@ class UiDesignerCommandTest {
             "reload",
             "save",
             "scaffold",
+            "status",
+            "sync",
         )
     }
 
@@ -1253,6 +1260,332 @@ class UiDesignerCommandTest {
             "beta.json",
         )
     }
+
+    @Test
+    fun `status reports in-sync for a matching chest without writing`() {
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
+        val command =
+            unregisteredCommand(
+                region = region(0, 0, 0, 0, 0, 0),
+                importer = { listOf(UiChest("Shop", 3, emptyList())) },
+            )
+
+        val outcome =
+            assertInstanceOf(
+                UiDesignerCommand.StatusOutcome.Reported::class.java,
+                command.status(player, null),
+            )
+
+        assertTrue(outcome.report.isInSync)
+        assertEquals("Shop", ChestNamer.nameOf(world.getBlockAt(0, 0, 0)))
+    }
+
+    @Test
+    fun `status reports drift without applying it`() {
+        val chest = blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(chest, "shop")
+        (chest.state as Chest).blockInventory.setItem(0, ItemStack(Material.STONE))
+        val command =
+            unregisteredCommand(
+                region = region(0, 0, 0, 0, 0, 0),
+                importer = { listOf(design("Shop", row(1, slot(1, "minecraft:dirt")))) },
+            )
+
+        val outcome =
+            assertInstanceOf(
+                UiDesignerCommand.StatusOutcome.Reported::class.java,
+                command.status(player, null),
+            )
+
+        assertInstanceOf(ChestStatus.Updated::class.java, outcome.report.statuses.single())
+        assertEquals("shop", ChestNamer.nameOf(world.getBlockAt(0, 0, 0)))
+        assertEquals(
+            Material.STONE,
+            (world.getBlockAt(0, 0, 0).state as Chest).blockInventory.getItem(0)?.type,
+        )
+    }
+
+    @Test
+    fun `status classifies missing and orphan chests`() {
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
+        ChestNamer.setName(blockAt(Material.CHEST, 2, 0, 0), "Old")
+        val command =
+            unregisteredCommand(
+                region = region(0, 0, 0, 2, 0, 0),
+                importer = {
+                    listOf(
+                        UiChest("Shop", 3, emptyList()),
+                        UiChest("Vault", 3, emptyList())
+                    )
+                },
+            )
+
+        val outcome =
+            assertInstanceOf(
+                UiDesignerCommand.StatusOutcome.Reported::class.java,
+                command.status(player, null),
+            )
+
+        assertEquals(listOf("Vault"), outcome.report.missing.map { it.file.name })
+        assertEquals(listOf("Old"), outcome.report.orphans.map { it.world.name })
+    }
+
+    @Test
+    fun `status classifies unnamed and duplicate chests as unjoinable`() {
+        blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(blockAt(Material.CHEST, 2, 0, 0), "Shop")
+        ChestNamer.setName(blockAt(Material.CHEST, 4, 0, 0), "shop")
+        val command =
+            unregisteredCommand(region = region(0, 0, 0, 4, 0, 0), importer = { emptyList() })
+
+        val outcome =
+            assertInstanceOf(
+                UiDesignerCommand.StatusOutcome.Reported::class.java,
+                command.status(player, null),
+            )
+
+        assertEquals(3, outcome.report.unjoinable.size)
+    }
+
+    @Test
+    fun `sync writes the file contents and chest name`() {
+        val chest = blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(chest, "shop")
+        (chest.state as Chest).blockInventory.setItem(5, ItemStack(Material.DIAMOND))
+        val command =
+            unregisteredCommand(
+                region = region(0, 0, 0, 0, 0, 0),
+                importer = {
+                    listOf(design("Shop", row(1, slot(1, "minecraft:stone", "Stone"))))
+                },
+            )
+
+        val outcome =
+            assertInstanceOf(
+                UiDesignerCommand.SyncOutcome.Synced::class.java,
+                command.sync(player, null),
+            )
+
+        assertEquals(1, outcome.result.applied)
+        assertEquals("Shop", ChestNamer.nameOf(world.getBlockAt(0, 0, 0)))
+        val inventory = (world.getBlockAt(0, 0, 0).state as Chest).blockInventory
+        assertEquals(Material.STONE, inventory.getItem(0)?.type)
+        assertEquals("Stone", inventory.getItem(0)?.plainDisplayName())
+        assertNull(inventory.getItem(5))
+    }
+
+    @Test
+    fun `sync leaves orphans untouched`() {
+        blockAt(Material.CHEST, 0, 0, 0)
+        ChestNamer.setName(blockAt(Material.CHEST, 2, 0, 0), "Old")
+        (
+            world
+                .getBlockAt(
+                    2,
+                    0,
+                    0
+                ).state as Chest
+        ).blockInventory.setItem(0, ItemStack(Material.DIAMOND))
+        val command =
+            unregisteredCommand(
+                region = region(0, 0, 0, 2, 0, 0),
+                importer = { listOf(UiChest("Shop", 3, emptyList())) },
+            )
+
+        command.sync(player, null)
+
+        assertEquals("Old", ChestNamer.nameOf(world.getBlockAt(2, 0, 0)))
+        assertEquals(
+            Material.DIAMOND,
+            (world.getBlockAt(2, 0, 0).state as Chest).blockInventory.getItem(0)?.type,
+        )
+    }
+
+    @Test
+    fun `status reads the configured output file by default`() {
+        var imported: Path? = null
+        val command =
+            unregisteredCommand(
+                importer = { path ->
+                    imported = path
+                    emptyList()
+                },
+            )
+
+        command.status(player, null)
+
+        assertEquals(DEFAULT_OUTPUT, imported)
+    }
+
+    @Test
+    fun `sync resolves a relative file against the data folder`(
+        @TempDir directory: Path
+    ) {
+        var imported: Path? = null
+        val command =
+            unregisteredCommand(
+                outputFile = directory.resolve("default.json"),
+                dataFolder = directory,
+                importer = { path ->
+                    imported = path
+                    emptyList()
+                },
+            )
+
+        command.sync(player, "design.json")
+
+        assertEquals(directory.resolve("design.json"), imported)
+    }
+
+    @Test
+    fun `status reads an absolute file unchanged`() {
+        var imported: Path? = null
+        val absolute = Path.of("/tmp/elsewhere/design.json")
+        val command =
+            unregisteredCommand(
+                importer = { path ->
+                    imported = path
+                    emptyList()
+                },
+            )
+
+        command.status(player, absolute.toString())
+
+        assertEquals(absolute, imported)
+    }
+
+    @Test
+    fun `status reports a missing file without duplicating the path`() {
+        val command =
+            unregisteredCommand(
+                importer = { throw NoSuchFileException(DEFAULT_OUTPUT.toString()) },
+            )
+
+        val outcome = command.status(player, null)
+
+        assertEquals(UiDesignerCommand.StatusOutcome.IoFailure(DEFAULT_OUTPUT, null), outcome)
+    }
+
+    @Test
+    fun `console status and sync do not import or write`() {
+        var imported = 0
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            importer = {
+                imported++
+                emptyList()
+            },
+        )
+
+        CommandAPITestUtilities.assertCommandSucceeds(server.consoleSender, "uidesigner status")
+        CommandAPITestUtilities.assertCommandSucceeds(server.consoleSender, "uidesigner sync")
+        CommandAPITestUtilities.assertCommandSucceeds(
+            server.consoleSender,
+            "uidesigner status design.json",
+        )
+        CommandAPITestUtilities.assertCommandSucceeds(
+            server.consoleSender,
+            "uidesigner sync design.json",
+        )
+
+        assertEquals(0, imported)
+    }
+
+    @Test
+    fun `dispatch of status reports the drift`() {
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            region = region(0, 0, 0, 0, 0, 0),
+            importer = { listOf(UiChest("Shop", 3, emptyList())) },
+        )
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner status")
+
+        val message = plainMessage()
+        assertTrue(message.contains("in-sync"))
+        assertTrue(message.contains(DEFAULT_OUTPUT.toString()))
+    }
+
+    @Test
+    fun `dispatch of sync applies the design`() {
+        ChestNamer.setName(blockAt(Material.CHEST, 0, 0, 0), "Shop")
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            region = region(0, 0, 0, 0, 0, 0),
+            importer = { listOf(design("Shop", row(1, slot(1, "minecraft:stone")))) },
+        )
+        player.isOp = true
+
+        CommandAPITestUtilities.assertCommandSucceeds(player, "uidesigner sync")
+
+        val message = plainMessage()
+        assertTrue(message.contains("Synced 1 matched chest design"))
+        assertEquals(
+            Material.STONE,
+            (world.getBlockAt(0, 0, 0).state as Chest).blockInventory.getItem(0)?.type,
+        )
+    }
+
+    @Test
+    fun `status suggests json files in the data folder`(
+        @TempDir directory: Path
+    ) {
+        Files.writeString(directory.resolve("beta.json"), "[]")
+        Files.writeString(directory.resolve("alpha.json"), "[]")
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            outputFile = directory.resolve("design.json"),
+            dataFolder = directory,
+        )
+
+        CommandAPITestUtilities.assertCommandSuggests(
+            player,
+            "uidesigner status ",
+            "alpha.json",
+            "beta.json",
+        )
+    }
+
+    @Test
+    fun `sync suggests json files in the data folder`(
+        @TempDir directory: Path
+    ) {
+        Files.writeString(directory.resolve("beta.json"), "[]")
+        Files.writeString(directory.resolve("alpha.json"), "[]")
+        val plugin = MockCommandAPIPlugin.load()
+        registeredCommand(
+            plugin,
+            outputFile = directory.resolve("design.json"),
+            dataFolder = directory,
+        )
+
+        CommandAPITestUtilities.assertCommandSuggests(
+            player,
+            "uidesigner sync ",
+            "alpha.json",
+            "beta.json",
+        )
+    }
+
+    private fun design(name: String, vararg rows: UiRow): UiChest =
+        UiChest(name, rows = 3, content = rows.toList())
+
+    private fun row(row: Int, vararg slots: UiSlot): UiRow = UiRow(row, slots.toList())
+
+    private fun slot(slot: Int, item: String, name: String? = null): UiSlot =
+        UiSlot(slot, item, name)
+
+    private fun ItemStack.plainDisplayName(): String? =
+        itemMeta
+            ?.displayName()
+            ?.let { PlainTextComponentSerializer.plainText().serialize(it) }
+            ?.ifBlank { null }
 
     private fun registeredCommand(
         plugin: JavaPlugin,

@@ -140,6 +140,28 @@ Out of scope (backlog):
   (in-sync/updated/missing/orphan/unjoinable) and `sync` applies file contents
   to matched chests. Orphans are reported, never deleted; structure drift is
   reported, not auto-repaired.
+- **Reconcile joins by normalised name and sync never repairs structure (170).**
+  `export/Reconcile` is pure (no Bukkit). It joins the file's `List<UiChest>` to
+  the world's by `trim().lowercase()` name and yields one classification per
+  chest: `InSync`, `Updated` (with a `ChestDrift` of `rowsDiffer`, `nameDiffer`,
+  and per-row/slot differences), `Missing` (file-only), `Orphan` (world-only),
+  or `Unjoinable` (an unnamed world chest, or one whose normalised name is
+  shared with another world chest — both duplicates are unjoinable and any
+  matching file entry is `Missing`). Content comparison normalises to
+  `(row, slot) -> (material id, item custom name)` with blank names treated as
+  absent, so slot order and empty slots never register as drift. Because drift
+  is measured against the file's exact name, a chest matched only
+  case-insensitively is `Updated` (`nameDiffer`), not `InSync`.
+  `status` renders the report and writes nothing. `sync` writes the file's name
+  to every matched chest and replaces its contents (a full-slot write, so
+  removed slots are cleared). On a `rowsDiffer` mismatch `sync` writes the name
+  but **skips that chest's contents** and reports the structure drift: a single
+  27-slot chest cannot hold a 6-row design, and writing a 6-row design through
+  an unlinked double's 27-slot block inventory would drop half the file, so the
+  safe move is to leave the shape alone and flag it. The chest stays drifted
+  until the human fixes the world. `sync` never resizes, creates, or moves a
+  chest, and orphans are never written. Both commands are player-only and reuse
+  `scaffold`'s file resolution and IO/parse/invalid-design reporting.
 - **Scaffold reads purely and places thinly.** `JsonImporter` lives in the pure
   `export` package: it deserializes the file and validates `rows` 1..6, row/slot
   ranges, item ids, and non-blank unique names (trimmed, case-insensitive,
