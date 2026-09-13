@@ -3,7 +3,9 @@
 A Paper plugin that turns chests placed in a world into a JSON description of a
 UI. You design the UI in-game (place chests, fill them, name them), select the
 region with Fast Async WorldEdit, and the plugin exports the design to JSON.
-That file is later handed to an agent to implement the real UI.
+That file is later handed to an agent to implement the real UI. The reverse loop
+is also supported: a design file is scaffolded back into named chests, and world
+copies are reconciled against it by name.
 
 ## Use case
 
@@ -16,6 +18,10 @@ As a developer I want to:
 4. Run a save command; the selection is written to JSON.
 5. Have double chests saved as **one** entity, not two.
 6. Use `/chest-edit` to name the chest block I am looking at.
+7. Scaffold a saved JSON back into named, empty chests so I can inspect the
+   layout in-world.
+8. Run `/uidesigner status` to see which chests drift from the file, and
+   `/uidesigner sync` to apply the file's contents to a placed copy.
 
 ## Scope
 
@@ -26,13 +32,17 @@ In scope (MVP):
 - Group double chests into a single entry.
 - Export to JSON at a configurable path.
 - Rename chests via `/chest-edit`.
+- Scaffold a design JSON into named, empty chests (structure only), using names
+  as identity.
+- Reconcile a placed copy's contents against the JSON with `/uidesigner status`
+  and `/uidesigner sync`, reporting drift.
 
 Out of scope (backlog):
 
-- Importing JSON back into a world.
 - Editing arbitrary block types (barrels, shulkers, ...).
 - Rendering the designed UI as a live inventory.
 - Databases, localization frameworks, custom UI libraries.
+- Storing world positions/rotation in the JSON (the world owns layout).
 
 ## Decisions (taken without asking)
 
@@ -94,19 +104,15 @@ Out of scope (backlog):
 - **Chest names:** stored in the chest block's custom display name
   (`Nameable`), not a PersistentDataContainer. It is visible in the chest GUI,
   persists in block-entity NBT across restarts, and the exporter reads it as
-  plain text. Both halves of a double chest are named/cleared together, and
-  `nameOf` reads the first named half. If one half is in an unloaded chunk,
-  Bukkit does not report a `DoubleChest`, so `/chest-edit` only names or clears
-  the loaded half; the exporter likewise only sees loaded halves and, since 140,
-  fails closed when a double chest's other half is missing (see below).
-  `/chest-edit clear` (case-insensitive, surrounding whitespace trimmed) is
-  reserved for removal and blank input also clears, so a literal name "clear"
-  is unreachable. Clearing an already-unnamed chest reports that there is
-  nothing to clear. Bare `/chest-edit` prints a usage line instead of touching
-  the targeted block. For an unlinked geometry-merged double (no `DoubleChest`
-  holder), `nameOf` sees only the canonical half, so a name on the other half
-  is not exported; carrying both merged positions out of the grouper is
-  deferred.
+  plain text. Both halves of a double chest are named together, and `nameOf`
+  reads the first named half. If one half is in an unloaded chunk, Bukkit does
+  not report a `DoubleChest`, so `/chest-edit` only names the loaded half; the
+  exporter likewise only sees loaded halves and, since 140, fails closed when a
+  double chest's other half is missing (see below). Bare `/chest-edit` prints a
+  usage line instead of touching the targeted block; blank input is rejected
+  rather than clearing. For an unlinked geometry-merged double (no `DoubleChest`
+  holder), `nameOf` sees only the canonical half, so a name on the other half is
+  not exported; carrying both merged positions out of the grouper is deferred.
 - **One half selected:** a chest whose partner half is missing from the
   selection is a clipped double, so the export fails closed: it reports the
   captured and partner blocks and writes no file. The selection is
@@ -116,6 +122,22 @@ Out of scope (backlog):
 - **Chest materials:** `CHEST`, `TRAPPED_CHEST`, and the copper chest variants
   (`Tag.COPPER_CHESTS`) are all treated as chests by the scanner and
   `/chest-edit`; every one maps to `Chest`/`ChestData` and can form a double.
+- **Names are the identity.** Every exported chest must have a non-blank name,
+  unique across the file (surrounding whitespace ignored, comparison
+  case-insensitive, original casing preserved). The exporter fails closed and
+  writes no file, listing unnamed chest positions and duplicate name+positions.
+  `UiChest.name` is non-null. This makes each entry referenceable by the
+  importer, which joins world chests to file entries by name.
+- **`/chest-edit clear` is removed.** Names are mandatory, so clearing only
+  produced an unsavable chest. `clear` is now an ordinary name and blank input
+  is rejected; this also drops the reserved-word sentinel from the command tree.
+- **The importer is declarative reconcile.** The file is desired state and the
+  world is observed state; `name` is the join key. `scaffold` materializes
+  structure (named, empty chests with correct `rows`), and because the format
+  carries no positions the world owns layout. `status` reports drift
+  (in-sync/updated/missing/orphan/unjoinable) and `sync` applies file contents
+  to matched chests. Orphans are reported, never deleted; structure drift is
+  reported, not auto-repaired.
 
 ## Naming
 
