@@ -74,3 +74,72 @@ No findings.
   The ticket mandates accepting 1..6 and `design.md:152` records the structural
   approximation, so the "same rows" round trip holds for real exporter output
   (only 3/6).
+
+## Round 2
+
+### Verdict
+Ship. I concur with all five round-1 fixes — the empty-design rejection,
+`NoSuchFileException` -> `IoFailure(file, null)`, `InvalidDesignException`
+carrying `file`+`detail`, `Obstructed.firstIsPlayer`, and the
+`resolveScaffoldFile` delegation to `resolvePath` — and found no regression in
+the double geometry, atomic pre-check, name semantics, or outcome mapping.
+
+### Findings
+No findings.
+
+### Non-findings
+
+- **Empty design rejects as `ParseFailure` (concur).** `JsonImporter.validate`
+  fails up front with `"the design contains no chests."`, so `read` can no
+  longer return an empty list and `scaffold` can no longer print a green
+  `Placed(0)`/`"Scaffolded 0 chest designs"` for a no-op. The export path can
+  never write an empty array (`save` returns `NoChests` before the exporter), so
+  the `save`->`scaffold` round trip is unaffected, and no 160 acceptance
+  criterion requires accepting an empty file. It is a deliberate policy for the
+  shared reader; if 170 needs an empty desired state to be legitimate it can
+  catch `InvalidDesignException` or special-case it there.
+- **`NoSuchFileException` -> `IoFailure(file, null)` (concur).** The subtype
+  catch precedes `IOException`, so a missing file keeps the resolved `file` and
+  the null reason lets `scaffoldIoFailureMessage` fall back to
+  `SCAFFOLD_IO_HINT`; the duplicated path is gone. Other IO failures
+  (`AccessDeniedException`, directory reads) still carry `e.message`, a bad
+  explicit path still maps to `IoFailure(null, ...)` via the
+  `resolveScaffoldFile` catch, and the IO-vs-parse split is unchanged.
+- **`InvalidDesignException` carries `file` + `detail` (concur).** The command
+  renders `ParseFailure(file, e.detail)` against the resolved file once, so a
+  bad entry reads `Invalid design in <file>: entry #1 ("Shop") has rows=7;
+  expected 1..6.` with no doubled path; `message` still contains both file and
+  entry. The row/slot messages now derive their bounds from
+  `ROW_RANGE`/`SLOT_RANGE`, so the wording matches the range actually enforced
+  and 1/2/4/5 still validate as before.
+- **`Obstructed.firstIsPlayer` (concur).** `ScaffoldPlacer` builds an ordered
+  `List<Obstruction>` with a `byPlayer` flag and still evaluates every target
+  before any write, so atomicity, the count, and first-in-plan-order semantics
+  are intact. `firstIsPlayer` tracks the first blocked target only (a later
+  player block behind an earlier solid one still reports the solid one), which
+  is exactly what the message claims; `ScaffoldOutcome.Obstructed` and
+  `scaffoldObstructedMessage` plumb it through.
+- **`resolveScaffoldFile` delegates to `resolvePath` (concur).** The blank guard
+  stays and everything else goes through the single normalising rule
+  (`UiDesignerConfig.resolvePath`, now public and also used by `outputFile`), so
+  the absolute/relative contract cannot drift; `InvalidPathException` still
+  falls into the surrounding try and maps to `IoFailure(null, ...)`. Absolute
+  paths still pass through normalised and relative paths still join the data
+  folder.
+- **Geometry, atomic pre-check, and naming are unchanged.** The only placer
+  changes are the `offsetBy` rename (identical body: `x + step.modX * offset`,
+  `z + step.modZ * offset`), the `Obstruction` wrapper, and the extra result
+  field; the RIGHT/LEFT assignment, `view.oppositeFace`,
+  `view.rotateYClockwise()`, pre-check-before-write, the
+  `BoundingBox.of(block)` player-overlap volume, and `ChestNamer.setName` on the
+  start block are the round-1 code that I verified against vanilla's
+  `getConnectedDirection` and `CraftChest.getInventory()`.
+- **Outcome mapping still covers all five branches.** `Placed`, `NoTarget`,
+  `ParseFailure` (invalid design, empty design, malformed JSON), `Obstructed`
+  (now with `firstIsPlayer`), and `IoFailure` (missing, unreadable, unresolvable
+  path) each map to their `ScaffoldOutcome` and message.
+- **Round-1 non-findings still stand.** Explicit `minecraft:air`/non-item ids
+  still pass `Material.matchMaterial` (deferred to 170), `ScaffoldOutcome.NoTarget`
+  is still unreachable because the anchor fallback always resolves a block (the
+  new hint text does not change that), and `rows` 1/2/4/5 still place a 3-row
+  single per the documented approximation.

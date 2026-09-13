@@ -124,3 +124,68 @@ anchor fallback and no console-sender guard. Ship with those added.
   and the stated MockBukkit limits (no linked `DoubleChest`, throwing
   `getTargetBlockExact`/`getFacing`) are the real restrictions. Only the
   fallback *location* assertion is thin (finding 4).
+
+## Round 2
+
+### Verdict
+Ship. All four round-1 findings are fixed with tests at the right layer, and the
+tests added for the UX fixes pin observable contracts rather than internals. I
+found no new test-quality or harness-fidelity issue.
+
+### Findings
+None.
+
+### Non-findings
+- **Concur with round-1 tester #1; it is fully addressed and then some.**
+  `MessagesTest.kt:125-181` now covers the success body (both numbers and the
+  double-chest caveat), both obstruction variants (count, position, block vs
+  player recovery), the parse-failure path+entry, the IO-failure path+fallback
+  (and the null-path hint), and the no-target anchor wording. Every scaffold
+  message is registered in `allMessages()` (`:310-318`), so the shared
+  prefix/palette/period invariants now apply. The two dispatch tests
+  (`UiDesignerCommandTest.kt:1133-1171`) add the outcome→message wiring I asked
+  for, and `scaffoldObstructedMessage(3, BlockPos(4,5,6), firstIsPlayer=false)`
+  (`:138`) directly asserts the acceptance criterion "message names the first
+  blocked position". The signature change to carry `firstIsPlayer` is likewise
+  pinned at the body, outcome and placer layers (`MessagesTest.kt:148-156`,
+  `UiDesignerCommandTest.kt:937-970`, `ScaffoldPlacerTest.kt:91-107,120-124`).
+- **Concur with round-1 tester #2; the production matcher seam is now covered.**
+  `MaterialResolverTest.kt:8-22` proves namespaced, legacy and unknown/blank ids
+  resolve through `Material.matchMaterial`, and
+  `scaffold imports an exported file through the production importer`
+  (`UiDesignerCommandTest.kt:1061-1094`) omits the `importer` override, writes a
+  real `JsonExporter.toJson` file, and asserts the injected placer receives the
+  decoded names/rows — so the default
+  `JsonImporter.read(it, MaterialResolver::isKnown)` and the exporter's
+  `minecraft:*` id contract are exercised end to end. This is the right layer
+  and does not need the un-runnable player placer.
+- **Concur with round-1 tester #3; the console path is pinned.**
+  `console scaffold does not import or place` (`UiDesignerCommandTest.kt:1172-1197`)
+  drives both the no-arg and file forms through `server.consoleSender` and
+  asserts zero importer/placer calls, matching `console save does not export`.
+- **Concur with round-1 tester #4; the fallback is now asserted in the manual
+  gate.** MT-013 (`docs/manual-test.md:24`) now instructs the tester to aim at
+  open air so the fallback fires and to confirm "the row starts in the block
+  directly in front of your feet at the anchor's Y and runs across your view",
+  which is exactly the path `anchorOf` cannot be driven through under
+  MockBukkit.
+- **The new UX-fix tests are observably layered, not over-specified.**
+  `an empty design fails naming the file` (`JsonImporterTest.kt:146-158`) asserts
+  the exception's `file`/`detail`, `scaffold reports a missing file without
+  duplicating the path` (`UiDesignerCommandTest.kt:1029-1040`) asserts
+  `IoFailure(file, null)` rather than the exception's raw path text, and
+  `scaffold translates a malformed JSON failure` (`:1042-1059`) asserts the fixed
+  player-facing phrase — each checks the contract, not a message copy of the
+  library exception. No new over-mocking, brittle assertions or redundant tests.
+- **No new harness limit, so no new manual entry is owed.**
+  `MaterialResolverTest` runs without MockBukkit because `Material.matchMaterial`
+  is a static lookup and is green; the player-entry placer remains the only
+  untestable path and is still gated by MT-013/MT-015. MT-015's claim that the
+  missing/malformed paths are also unit-tested is now accurate.
+- **One residual branch deliberately not requested.**
+  `scaffoldParseFailureMessage(path, null)` (the `SCAFFOLD_PARSE_HINT` fallback,
+  reachable from a generic exception with a null message) is not asserted; the
+  same `reasonOrDefault` fallback is already covered for three other messages in
+  `failure messages fall back to a hint when the reason is blank`
+  (`MessagesTest.kt:142-150`) and for the IO path at `:165-173`, so the only
+  untested piece is one literal hint string. I do not think that earns a test.

@@ -120,3 +120,76 @@ the command duplicates config rather than delegating to it.
   required/unique names, and row/slot ranges; the importer enforces exactly those,
   and the export-only `rows`-derives-from-3/6 sentence is not contradicted by the
   read path's accepted range.
+
+## Round 2
+### Verdict
+Ship with two small doc fixes. All three round-1 findings are fixed and the docs
+now match the code on the points I raised: `resolveScaffoldFile` delegates to
+`UiDesignerConfig.resolvePath` (`UiDesignerCommand.kt:218-222`), the package tree
+calls `MaterialResolver` a boolean predicate (`architecture.md:35`), and the
+scaffold data-flow block puts placement/naming inside `ScaffoldPlacer.place` and
+branches parse/IO failures off the importer step (`architecture.md:275-294`). The
+`place/` seams, the pure `export` boundary, world-owns-layout, and the 170 seams
+are all unchanged; only `docs/data-format.md` is now missing a rule the reader
+enforces, plus one stale clause in the reader seam bullet.
+
+### Findings
+#### 1. `docs/data-format.md` does not record the reader's new non-empty rule
+- Location: `docs/data-format.md:30-50` (Rules), `src/main/kotlin/dev/cypdashuhn/uidesigner/export/JsonImporter.kt:21-23`
+- Problem: the empty-file no-op fix added a new reader-level constraint — an empty
+  array is an invalid design and is rejected up front (design.md:147 and
+  architecture.md:164 both say so). `docs/data-format.md` is the authoritative
+  schema, and its Rules still describe only `name`/`rows`/slot and ordering
+  invariants, so a hand-authored or reviewed `[]` reads as a valid file there
+  while `scaffold` refuses it. This refines my round-1 "needs no change" note: the
+  rule did not exist when round 1 was written.
+- Suggested fix: add one Rules bullet, e.g. the array must contain at least one
+  chest; an empty design is rejected (naming the file), so `scaffold` never reports
+  a green no-op.
+
+#### 2. The `InvalidDesignException` purity clause in the reader seam is stale and unclear
+- Location: `docs/architecture.md:166` ("`InvalidDesignException` is not a `Path`-only concern, so the reader never names a Bukkit type.")
+- Problem: the exception now carries `file: Path` and `detail: String`
+  (`JsonImporter.kt:7-10`), so "not a `Path`-only concern" states the opposite of
+  what the type is, and the sentence is the only explanation of why the pure
+  reader is still allowed to validate materials. A reader cannot tell which
+  invariant it protects or why the class lives in `export`.
+- Suggested fix: state the invariant directly, e.g. "`InvalidDesignException`
+  carries only `Path`/`String` fields, so the reader names no Bukkit type even
+  though it validates item ids through the injected matcher."
+
+### Non-findings
+- **Round-1 finding 1 is fixed.** `resolveScaffoldFile` (`UiDesignerCommand.kt:218-222`)
+  is now just the blank guard plus `config.resolvePath(rawFile)`, and
+  `UiDesignerConfig` has a single public `resolvePath` used by both `outputFile`
+  and the command (`UiDesignerConfig.kt:11-17`); no second copy of the
+  absolute/relative rule remains.
+- **Round-1 finding 2 is fixed.** `docs/architecture.md:35` now reads
+  `item id -> Boolean (reader's injected matcher; production = Material.matchMaterial != null)`,
+  matching `MaterialResolver.isKnown` and the `(String) -> Boolean` seam.
+- **Round-1 finding 3 is fixed.** The scaffold data-flow block
+  (`docs/architecture.md:275-294`) places and names inside the `ScaffoldPlacer.place`
+  step, branches `InvalidDesignException`/`SerializationException` and
+  `NoSuchFileException`/`IOException` off the importer step, and labels the final
+  arrow as the command's mapping of both the import step and `PlacementResult`.
+- **The fixes introduced no seam gap and no new abstraction.** `firstIsPlayer`
+  threads through `PlacementResult.Obstructed` (`ScaffoldPlacer.kt:19-23`) and the
+  private `Obstruction` helper stays internal to `place/`; `InvalidDesignException`
+  still only carries `Path`/`String`; `export` has no Bukkit import and `place/`
+  still depends inward on `export/UiChest` and `naming/ChestNamer`.
+- **Seams for 170 hold.** `JsonImporter.read(file, matcher)`, the injected matcher
+  pattern, `resolvePath`, and `jsonFiles` remain reusable by
+  `/uidesigner status [file]` and `/uidesigner sync [file]`, and the boolean-only
+  `MaterialResolver` can be extended with an actual `Material` resolver without
+  touching the reader seam. The reconcile path still needs no scaffold-shaped
+  abstraction.
+- **`docs/design.md` matches the code.** The "Scaffold reads purely and places
+  thinly" entry (`design.md:143-158`) carries the empty-design rejection, the
+  pure-reader/matcher seam, the 3/6-vs-other-rows approximation, the atomic
+  pre-check, and the player-vs-block obstruction distinction the code now
+  implements.
+- **`docs/manual-test.md` MT-013/MT-014/MT-015 are truthful and attributed to
+  160.** They cover the live double/single placement (MT-013, now including the
+  no-target fallback origin), the `scaffold` → `save` round trip (MT-014), and the
+  anchor/obstruction plus missing/malformed-file rejections (MT-015); each names
+  ticket 160 and its MockBukkit limitation.

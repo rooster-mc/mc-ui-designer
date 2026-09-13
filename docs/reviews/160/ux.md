@@ -140,3 +140,96 @@ fix hint.
 - **Implicit success location is fine.** The success line names the file but not
   the anchor coordinates; the player just triggered the placement and is
   standing at the anchor, so the "where" is self-evident.
+
+## Round 2
+
+### Verdict
+
+Ship. All five round-1 findings read fixed: the empty-file no-op success is gone
+and the success line now carries save's double-count caveat, the missing-file
+path duplication and suppressed hint are resolved, parser/validation failures
+render once and no longer leak kotlinx text, obstruction distinguishes
+player-occupancy from solid blocks and adds recovery, and help states both the
+default file and the anchor/fallback rule. I concur with the empty-file-as-
+`ParseFailure` judgment call. One residual IO edge remains: the hint special-case
+is keyed to `NoSuchFileException`, so any other `IOException` whose message is
+just the path (e.g. permission denied) still renders the path twice with no hint.
+
+### Findings
+
+#### 1. IO-failure hint is keyed to `NoSuchFileException`, so other path-only IO errors still duplicate the path and lose the hint
+
+- Location:
+  `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/UiDesignerCommand.kt:197-200`
+  and `:424-428`, `src/main/kotlin/dev/cypdashuhn/uidesigner/util/Messages.kt:25-26`
+- Problem: round 1's missing-file duplication is fixed only for one exception
+  type. `AccessDeniedException` (an unreadable design file — e.g. owned by
+  another user with no read bit) is an `IOException` whose `getMessage()` is
+  also just the path, and it falls to `catch (e: IOException) { IoFailure(file, e.message) }`
+  (`:199-200`). `scaffoldIoFailureMessage` then builds
+  `target = "the design file $file"` and passes the same path as `detail`; because
+  the reason is non-blank, `reasonOrDefault` (`Messages.kt:25-26`) suppresses
+  `SCAFFOLD_IO_HINT`, so the player sees
+  `"Could not read the design file /…/design.json: /…/design.json."` — the path
+  twice and no "check the file exists and is readable" direction. A directory
+  read renders the same way (path in `target`, path again inside the
+  `FileSystemException` reason). The defect is the *shape* of the exception
+  message, but the fix was applied to one *type*.
+- Suggested fix: decide by message shape rather than exception class, e.g. in the
+  `IOException` catch pass `e.message?.takeUnless { it == file.toString() }`, or
+  make the renderer always append the hint instead of substituting for it
+  (`"Could not read the design file <path> (check the file exists and is readable)."`).
+  Folding the existing `NoSuchFileException` special-case into the same rule
+  would leave one code path to reason about.
+
+### Non-findings
+
+- **Round-1 finding 1 (empty-file success) is fixed.** `JsonImporter.validate`
+  rejects an empty list (`JsonImporter.kt:21-23`), so the importer never returns
+  an empty design and `layout` maps non-empty chests to non-empty plans
+  (`ScaffoldPlacer.kt:88-104`); `PlacementResult.Placed(0)` now appears only in
+  injected test fakes, and `"Scaffolded 0 chest designs"` is unreachable in
+  production. `scaffoldSuccessMessage` now ends `"(a double chest counts once)."`
+  (`UiDesignerCommand.kt:384-390`), matching `saveSuccessMessage`.
+- **Round-1 finding 1 judgment call — concur.** With the reader rejecting an
+  empty list, the player sees
+  `"Invalid design in <file>: the design contains no chests."` It is red, fails
+  closed, and names both the file and the problem; there is no false success. A
+  distinct sixth outcome would add a case and a message for no additional player
+  information — "Invalid design" is a fair umbrella for "this file cannot be
+  scaffolded". I would not spend a finding on the difference between "empty" and
+  "malformed".
+- **Round-1 finding 2 (missing file) is fixed.** `NoSuchFileException` →
+  `IoFailure(file, null)` (`UiDesignerCommand.kt:197-198`) renders
+  `"Could not read the design file <path>: check the file exists and is readable."`
+  — path once, hint present. Only the non-missing IOException cases are left, and
+  that is finding 1 above, not a re-report of this one.
+- **Round-1 finding 3 (parse duplication / raw kotlinx text) is fixed.**
+  `InvalidDesignException` carries `file` + `detail` (`JsonImporter.kt:7-10`) and
+  the command uses `e.detail` (`UiDesignerCommand.kt:201-202`), so the path is
+  rendered exactly once by the `"Invalid design in $file: "` prefix; a
+  `SerializationException` becomes `"the file is not valid JSON"`
+  (`:203-204`, `:274`). No parser offsets or duplicated paths reach the player.
+- **Round-1 finding 4 (obstruction) is fixed.** `firstIsPlayer` threads through
+  `PlacementResult.Obstructed` (`ScaffoldPlacer.kt:19-23,73-77`) and
+  `ScaffoldOutcome.Obstructed`, and the message now reads
+  `"…the first at (x, y, z) is inside your body, so step aside…"` vs
+  `"…is not replaceable, so clear it or aim at open space…"`, both ending
+  `"and try again; nothing placed."` (`UiDesignerCommand.kt:405-421`). The count
+  is still the total obstruction count and the recovery describes the first,
+  which is the correct reading.
+- **Round-1 finding 5 (help/anchors) is fixed.** `HELP_TEXT` now says
+  `"(default file: the configured output-file)"` and
+  `"The row starts at the block you are looking at; aim at open space to use the
+  block in front of you."` (`UiDesignerCommand.kt:261-264`), and both the
+  obstruction (`:415-416`) and no-target (`:392-397`) messages point at open
+  space. A player can now predict where the row lands and what to do when it
+  will not.
+- **The malformed-JSON path bypassing `SCAFFOLD_PARSE_HINT` is acceptable.**
+  `"the file is not valid JSON"` is self-contained and truthful; the docs pointer
+  would be a nicety, not a gap worth a finding.
+- **Discoverability and consistency are unchanged and still fine.** `scaffold`
+  and the two-line help entry render through `helpMessage()`, tab completion
+  still lists sorted data-folder `.json` files, all non-success outcomes keep the
+  red `[UiDesigner]` palette and a `Cannot …`/`Could not …` opener, and the
+  player-only guard is unchanged.

@@ -74,3 +74,61 @@ clean. Four small structure/naming/message nits below, all cheap to fix.
   looks ktlint-consistent.
 - `MaterialResolver` as a one-line object is justified as the injected matcher
   seam; not unnecessary indirection.
+
+## Round 2
+
+### Verdict
+Ship. All four round-1 fixes landed cleanly and read better than before, the new
+message bodies and `MessagesTest` coverage are easy to follow, and the tree still
+has no comment/dead-code/line-length drift. Two small message/clarity nits below;
+neither is a reason to hold the ticket.
+
+### Findings
+
+#### 1. The `NoSuchFileException` branch silently drops the reason for a non-obvious end
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/UiDesignerCommand.kt:199-200`
+- Problem: `catch (e: NoSuchFileException) { return ScaffoldOutcome.IoFailure(file, null) }`
+  passes `null` instead of `e.message` (which the sibling `IOException` branch
+  uses) so that `scaffoldIoFailureMessage` falls back to the actionable hint
+  rather than echoing the path twice. That reasoning spans two files and is
+  stated nowhere: on the page the branch reads as if the exception message was
+  forgotten, and the `NoSuchFileException`-before-`IOException` ordering adds a
+  second detail a reader must notice to understand why the more specific catch
+  exists at all.
+- Suggested fix: add a one-line *why* comment (the repo allows comments for a
+  non-obvious why), e.g. `// message is only the path; fall back to the action
+  hint`, or extract the branch into a named helper such as
+  `missingFileFailure(file)` so the intent lives in the name.
+
+#### 2. `scaffoldNoTargetMessage`'s second sentence has no object
+- Location: `src/main/kotlin/dev/cypdashuhn/uidesigner/commands/UiDesignerCommand.kt:392-397`
+- Problem: `"Aim at open space to place in front of you."` never says what is
+  placed; the verb dangles, so the one line meant to tell the player how to
+  recover from a failed scaffold is the least clear of the new bodies.
+- Suggested fix: name the object, e.g. `"Aim at open space to place the row in
+  front of you."`
+
+### Non-findings
+- **Round-1 finding 1 (two names for one resolve)** is fixed cleanly:
+  `UiDesignerConfig` now has a single public `resolvePath` and the `outputFile`
+  getter calls it; the naming is now unambiguous.
+- **Round-1 finding 2 (`1..6`/`1..9` literals)** is fixed: the rows and slots
+  messages interpolate `ROW_RANGE`/`SLOT_RANGE` bounds, so the constants are the
+  single source of truth.
+- **Round-1 finding 3 (`BlockPos.plus`)** is fixed: `offsetBy(step, offset)` reads
+  correctly at both call sites and in `layout`.
+- **Round-1 finding 4 (near-duplicate hint)** is fixed: `SCAFFOLD_PATH_HINT` is
+  gone and the unresolved-path branch reuses `INVALID_OUTPUT_HINT`.
+- **No formatting drift.** No line in any changed `.kt` file exceeds 100 columns;
+  the scaffold message bodies and `allMessages()` entries follow the existing
+  `save`/`reload` shape (one assertion block per body, case-driven helper
+  variants), and the new `MessagesTest` scaffold tests are named by the same
+  `"<feature> <what it asserts>"` convention as their neighbours.
+- **No new comments or dead code.** The only comment in the changed test range is
+  the pre-existing MockBukkit note; every new constant (`SCAFFOLD_IO_HINT`,
+  `SCAFFOLD_PARSE_HINT`, `MALFORMED_DESIGN`) has a live use, and there is no
+  leftover `SCAFFOLD_PATH_HINT` or unused branch.
+- **`byPlayer` vs `firstIsPlayer` naming is acceptable.** The private
+  `Obstruction.byPlayer` maps once to the public
+  `PlacementResult.Obstructed.firstIsPlayer`, and the longer public name is the
+  clearer one at the call sites; not worth churn.
